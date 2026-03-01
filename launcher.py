@@ -41,7 +41,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.6.7 (Final Binding)"
+VERSION = "1.6.8 (Reliability Master)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
