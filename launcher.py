@@ -43,7 +43,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "2.1.0 (Hardware Synthesis)"
+VERSION = "2.2.0 (Cognitive Intel)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -54,7 +54,7 @@ MODELS_DIR = BASE_DIR_PATH / "models"
 CONFIG_FILE = BASE_DIR_PATH / "config" / "user_config.json"
 WORKFLOWS_DIR = BASE_DIR_PATH / "workspace" / "workflows"
 
-# --- MAPEAMENTO INDUSTRIAL DE HARDWARE (GOLDEN FLAGS) ---
+# --- MAPEAMENTO INDUSTRIAL DE HARDWARE ---
 GPU_DATABASE = {
     "NVIDIA": {
         "RTX 3060 Ti / 4060 (8GB)": "--normalvram --use-split-cross-attention --fp8_e4m3fn-text-enc",
@@ -68,9 +68,7 @@ GPU_DATABASE = {
         "RX 7900 XT / XTX (20GB+)": "--directml --gpu-only --highvram --fp16-vae",
         "RX 580 / 6600 (4GB-8GB)": "--directml --lowvram --fp8_e4m3fn-text-enc"
     },
-    "CPU / INTEGRATED": {
-        "Integrated / Basic": "--cpu"
-    }
+    "CPU / INTEGRATED": {"Integrated / Basic": "--cpu"}
 }
 
 RAM_PROFILES = {
@@ -112,7 +110,7 @@ class App(ctk.CTk):
         self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0, fg_color="#0a0a0a")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
-        ctk.CTkLabel(self.sidebar, text="NEURAL CORE 2.1", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
+        ctk.CTkLabel(self.sidebar, text="NEURAL CORE 2.2", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
         
         self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10)
         self.status_box.pack(padx=15, pady=5, fill="x")
@@ -150,44 +148,49 @@ class App(ctk.CTk):
         self.detect_hardware(); self.load_config()
         self.check_status_loop(); self.start_telemetry_loop()
 
-    def setup_optimizer_tab(self):
-        f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
-        f.pack(padx=40, pady=20, fill="both", expand=True)
-        ctk.CTkLabel(f, text="HARDWARE SYNTHESIS MANAGER", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=15)
-        self.lbl_detected = ctk.CTkLabel(f, text="DETECTED GPU: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=5)
-        self.lbl_vram_total = ctk.CTkLabel(f, text="TOTAL VRAM: ---", text_color="white", font=("Consolas", 12)); self.lbl_vram_total.pack(pady=5)
+    # --- DATASET WIZARD (COGNITIVE UPGRADE) ---
+    def dataset_wizard(self):
+        trigger = self.entry_trigger.get().strip()
+        if not trigger: messagebox.showwarning("Wizard", "Defina um TRIGGER WORD primeiro."); return
+        src = ctk.filedialog.askdirectory()
+        if not src: return
         
-        ctk.CTkLabel(f, text="SELECIONE SEU MODELO DE GPU (Manual Override):", text_color="#aaa").pack(pady=(15, 0))
-        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=450, height=45); self.gpu_picker.pack(pady=5)
+        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
+        dst.mkdir(parents=True, exist_ok=True)
+        res = int(self.train_res.get().strip()) if self.train_res.get().strip().isdigit() else 512
         
-        ctk.CTkLabel(f, text="Gerenciamento de RAM do Sistema:", text_color="gray").pack(pady=(15, 0))
-        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=400, height=40); self.ram_menu.pack(pady=5)
+        def process():
+            self.log_train.insert("end", "[*] Iniciando Dataset Wizard Neural...\n")
+            for i, f in enumerate(os.listdir(src)):
+                if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    ext = os.path.splitext(f)[1]; path_src = os.path.join(src, f); path_dst = dst / f"{trigger}_{i:03d}{ext}"
+                    # 1. Resize/Stabilize
+                    if self.chk_resize.get():
+                        with Image.open(path_src) as img:
+                            img = img.convert("RGB"); img.thumbnail((res, res), Image.Resampling.LANCZOS)
+                            new_img = Image.new("RGB", (res, res), (0, 0, 0))
+                            new_img.paste(img, ((res - img.size[0]) // 2, (res - img.size[1]) // 2))
+                            new_img.save(path_dst)
+                    else: shutil.copy2(path_src, path_dst)
+                    # 2. Captioning
+                    with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
+            
+            # 3. AI Neural Tagger (WD14)
+            if self.chk_tagger.get():
+                self.log_train.insert("end", "[*] Invocando AI Neural Tagger (WD14)...\n")
+                py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
+                tagger_script = get_short_path(TOOLS_DIR / "tagger.py")
+                cmd = [str(py), str(tagger_script), str(dst), trigger]
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                for line in proc.stdout: self.log_train.insert("end", f" > {line.strip()}\n"); self.log_train.see("end")
+                proc.wait()
+            
+            messagebox.showinfo("Wizard", f"Dataset Neural Completo: {res}x{res} + Tags")
+            self.log_train.insert("end", "[V] PROCESSO CONCLUÍDO COM SUCESSO!\n")
 
-        ctk.CTkLabel(f, text="Expert Engine Flags (Manual Injection):", text_color="#FF8C00").pack(pady=(15, 0))
-        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Ex: --cuda-malloc", height=45, width=450); self.entry_expert.pack(pady=5)
-        self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
-        
-        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=600); self.lbl_flags.pack(pady=25)
+        threading.Thread(target=process, daemon=True).start()
 
-    def refresh_optimizer_ui(self):
-        self.lbl_detected.configure(text=f"HARDWARE: {self.detected_vendor}")
-        # Carregar lista dinâmica baseada no Vendor
-        models = list(GPU_DATABASE[self.detected_vendor].keys())
-        self.gpu_picker.configure(values=models)
-        if models:
-            d = self.active_profile if self.active_profile in models else models[0]
-            self.gpu_picker.set(d); self.set_profile(d)
-
-    def set_profile(self, choice):
-        self.active_profile = choice
-        gpu_f = GPU_DATABASE[self.detected_vendor].get(choice, "")
-        ram_f = RAM_PROFILES.get(self.active_ram_profile, "")
-        self.lbl_flags.configure(text=f"ENGINE FLAGS: {gpu_f} {ram_f} {self.expert_flags}")
-        self.persist_config()
-
-    def set_ram_profile(self, choice):
-        self.active_ram_profile = choice; self.set_profile(self.active_profile)
-
+    # --- SYSTEM METHODS ---
     def detect_hardware(self):
         try:
             if os.name == "nt":
@@ -209,17 +212,15 @@ class App(ctk.CTk):
 
     def auto_suggest_profile(self):
         if self.detected_vram > 0 and not self.active_profile:
-            # Seleção automática por VRAM no Database novo
             models = list(GPU_DATABASE[self.detected_vendor].keys())
             if "NVIDIA" in self.detected_vendor:
-                if self.detected_vram <= 6144: p = models[3] # 2060/3050
-                elif self.detected_vram <= 8192: p = models[0] # 3060 Ti
-                elif self.detected_vram <= 16384: p = models[1] # 3060/4060 Ti
-                else: p = models[2] # 3090/4090
+                if self.detected_vram <= 6144: p = models[3]
+                elif self.detected_vram <= 8192: p = models[0]
+                elif self.detected_vram <= 16384: p = models[1]
+                else: p = models[2]
             else: p = models[0]
             self.gpu_picker.set(p); self.set_profile(p)
 
-    # --- BASE METHODS (CANVAS / TELEMETRY) ---
     def setup_canvas_tab(self):
         self.canvas_list = ctk.CTkTextbox(self.tab_canvas, font=("Consolas", 12), fg_color="#050505")
         self.canvas_list.pack(padx=20, pady=20, fill="both", expand=True)
@@ -312,6 +313,21 @@ class App(ctk.CTk):
         ctk.CTkButton(f, text="SAVE TO VAULT", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
         self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
 
+    def setup_optimizer_tab(self):
+        f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
+        f.pack(padx=40, pady=20, fill="both", expand=True)
+        ctk.CTkLabel(f, text="HARDWARE SYNTHESIS MANAGER", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=15)
+        self.lbl_detected = ctk.CTkLabel(f, text="DETECTED GPU: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=5)
+        self.lbl_vram_total = ctk.CTkLabel(f, text="TOTAL VRAM: ---", text_color="white", font=("Consolas", 12)); self.lbl_vram_total.pack(pady=5)
+        ctk.CTkLabel(f, text="SELECIONE SEU MODELO DE GPU (Manual Override):", text_color="#aaa").pack(pady=(15, 0))
+        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=450, height=45); self.gpu_picker.pack(pady=5)
+        ctk.CTkLabel(f, text="Gerenciamento de RAM do Sistema:", text_color="gray").pack(pady=(15, 0))
+        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=400, height=40); self.ram_menu.pack(pady=5)
+        ctk.CTkLabel(f, text="Expert Engine Flags (Manual Injection):", text_color="#FF8C00").pack(pady=(15, 0))
+        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Ex: --cuda-malloc", height=45, width=450); self.entry_expert.pack(pady=5)
+        self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
+        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=600); self.lbl_flags.pack(pady=25)
+
     def load_config(self):
         if CONFIG_FILE.exists():
             try:
@@ -356,8 +372,27 @@ class App(ctk.CTk):
             s.close(); self.after(5000, check)
         self.after(2000, check)
 
-    def update_expert_flags(self):
-        self.expert_flags = self.entry_expert.get().strip(); self.set_profile(self.active_profile)
+    def set_profile(self, choice):
+        self.active_profile = choice; self.update_flags_preview(); self.persist_config()
+
+    def set_ram_profile(self, choice):
+        self.active_ram_profile = choice; self.update_flags_preview(); self.persist_config()
+
+    def refresh_api_ui(self):
+        for w in self.api_list_frame.winfo_children(): w.destroy()
+        for key in self.saved_apis:
+            f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
+            ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
+            ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
+
+    def remove_api_key(self, key):
+        if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
+
+    def save_api_key(self):
+        key = self.entry_api.get().strip()
+        if len(key) >= 15 and " " not in key:
+            if key not in self.saved_apis: self.saved_apis.append(key); self.persist_config(); self.refresh_api_ui()
+        self.entry_api.delete(0, "end")
 
     def apply_preset(self, choice):
         p = PRESET_MODELS.get(choice)
@@ -384,9 +419,7 @@ class App(ctk.CTk):
             for root, dirs, files in os.walk(MODELS_DIR):
                 for f in files:
                     if f.endswith((".safetensors", ".ckpt")):
-                        path = Path(root) / f
-                        f_size = os.path.getsize(path) / (1024**3)
-                        total_size += f_size
+                        path = Path(root) / f; f_size = os.path.getsize(path) / (1024**3); total_size += f_size
                         trigger = self.get_lora_trigger(str(path)) if "loras" in str(path).lower() else ""
                         item = f"● {f} ({f_size:.2f} GB) {trigger}"
                         found = False
@@ -398,27 +431,6 @@ class App(ctk.CTk):
                     self.inv_list.insert("end", f"\n--- {cat.upper()} ---\n")
                     for m in sorted(items): self.inv_list.insert("end", f"{m}\n")
         self.lbl_inv_total.configure(text=f"Total Inventory Size: {total_size:.2f} GB")
-
-    def dataset_wizard(self):
-        trigger = self.entry_trigger.get().strip()
-        if not trigger: return
-        src = ctk.filedialog.askdirectory()
-        if not src: return
-        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
-        dst.mkdir(parents=True, exist_ok=True)
-        res = int(self.train_res.get().strip()) if self.train_res.get().strip().isdigit() else 512
-        for i, f in enumerate(os.listdir(src)):
-            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                ext = os.path.splitext(f)[1]; path_src = os.path.join(src, f); path_dst = dst / f"{trigger}_{i:03d}{ext}"
-                if self.chk_resize.get():
-                    with Image.open(path_src) as img:
-                        img = img.convert("RGB"); img.thumbnail((res, res), Image.Resampling.LANCZOS)
-                        new_img = Image.new("RGB", (res, res), (0, 0, 0))
-                        new_img.paste(img, ((res - img.size[0]) // 2, (res - img.size[1]) // 2))
-                        new_img.save(path_dst)
-                else: shutil.copy2(path_src, path_dst)
-                with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
-        messagebox.showinfo("Wizard", f"Dataset Created & Optimized ({res}x{res})")
 
     def start_training(self):
         m = self.train_base_model.get().strip(); n = self.train_lora_name.get().strip(); t = self.entry_trigger.get().strip()
@@ -432,40 +444,10 @@ class App(ctk.CTk):
         self.log_train.insert("end", f"[{time.strftime('%H:%M:%S')}] STARTING INDUSTRIAL TRAINING...\n")
         py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
         script = get_short_path(TOOLS_DIR / "sd-scripts" / "train_network.py")
-        cmd = [
-            str(py), str(script), 
-            "--pretrained_model_name_or_path", m, 
-            "--train_data_dir", str(BASE_DIR_PATH / "workspace/training_data" / t / "img"), 
-            "--output_dir", str(MODELS_DIR / "loras"), 
-            "--output_name", n, 
-            "--resolution", f"{res},{res}", 
-            "--train_batch_size", batch, 
-            "--network_dim", dim,
-            "--network_alpha", alpha,
-            "--max_train_steps", steps, 
-            "--learning_rate", lr, 
-            "--network_module", "networks.lora", 
-            "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"
-        ]
+        cmd = [str(py), str(script), "--pretrained_model_name_or_path", m, "--train_data_dir", str(BASE_DIR_PATH / "workspace/training_data" / t / "img"), "--output_dir", str(MODELS_DIR / "loras"), "--output_name", n, "--resolution", f"{res},{res}", "--train_batch_size", batch, "--network_dim", dim, "--network_alpha", alpha, "--max_train_steps", steps, "--learning_rate", lr, "--network_module", "networks.lora", "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for line in proc.stdout: self.log_train.insert("end", line); self.log_train.see("end")
         proc.wait()
-
-    def remove_api_key(self, key):
-        if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
-
-    def save_api_key(self):
-        key = self.entry_api.get().strip()
-        if len(key) >= 15 and " " not in key:
-            if key not in self.saved_apis: self.saved_apis.append(key); self.persist_config(); self.refresh_api_ui()
-        self.entry_api.delete(0, "end")
-
-    def refresh_api_ui(self):
-        for w in self.api_list_frame.winfo_children(): w.destroy()
-        for key in self.saved_apis:
-            f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
-            ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
-            ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
 
 if __name__ == "__main__":
     app = App(); app.mainloop()
