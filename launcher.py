@@ -45,7 +45,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES GLOBAIS ---
-VERSION = "2.8.4 (Visual & Link Fix)"
+VERSION = "2.8.5 (STABLE ROLLBACK)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -82,11 +82,12 @@ RAM_PROFILES = {
 }
 
 PRESET_MODELS = {
-    "● [BASE] Pony Diffusion V6 XL": {"id": "290640", "type": "checkpoints"},
-    "● [BASE] RealVisXL V4.0 (Photo)": {"id": "139562", "type": "checkpoints"},
-    "● [BASE] Juggernaut XL (Cinema)": {"id": "133005", "type": "checkpoints"},
-    "● [LORA] Realistic Skin Details": {"id": "356417", "type": "loras"},
-    "● [VAE] SDXL Official VAE": {"id": "290640", "type": "vae"}
+    "● [BASE] Pony Diffusion V6 XL": {"id": "290640", "type": "checkpoints", "source": "civitai"},
+    "● [BASE] RealVisXL V4.0 (Photo)": {"id": "139562", "type": "checkpoints", "source": "civitai"},
+    "● [VIDEO] Wan 2.2 T2V (14B GGUF)": {"repo": "city96/Wan2.1-T2V-14B-gguf", "file": "wan2.1-t2v-14b-q4_k_m.gguf", "type": "checkpoints", "source": "hf"},
+    "● [VIDEO] LTX-Video (High Quality)": {"repo": "Lightricks/LTX-Video", "file": "ltx-video-2b-v0.9.safetensors", "type": "checkpoints", "source": "hf"},
+    "● [LORA] Realistic Skin Details": {"id": "356417", "type": "loras", "source": "civitai"},
+    "● [VAE] SDXL Official VAE": {"id": "290640", "type": "vae", "source": "civitai"}
 }
 
 class App(ctk.CTk):
@@ -95,123 +96,112 @@ class App(ctk.CTk):
 
         self.title(f"AI NEURAL VIDEO STUDIO | {VERSION}")
         self.geometry("1400x950")
+        
+        # Atributos de Estado
         self.process = None
         self.saved_apis = []
         self.env_profiles = {}
-        self.detected_vendor = "CPU"
-        self.detected_vram = 0
-        self.active_profile = ""
-        self.active_ram_profile = "Balanced (Padrao)"
-        self.expert_flags = ""
         self.console_active = True
-        self.active_gallery_path = None
+        self.detected_vendor = "CPU / INTEGRATED"
+        self.active_profile = ""
+        self.expert_flags = ""
+        self.active_preset = {}
+        self.active_ram_profile = "Balanced (Padrao)"
         self.active_model_path = None
 
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Pre-declarar UI components para evitar AttributeError
-        self.sidebar = None
-        self.tabs = None
-        self.inv_scroll = None
-        self.lbl_preview = None
-        self.txt_meta = None
-        self.gal_list = None
-        self.lbl_gal_img = None
-        self.txt_gal_meta = None
-        self.console_box = None
-        self.gpu_picker = None
-        self.ram_menu = None
-        self.entry_expert = None
-        self.api_list_frame = None
+        # Sidebar
+        self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0)
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        
+        ctk.CTkLabel(self.sidebar, text="AI STUDIO", font=("Orbitron", 24, "bold"), text_color="#3498db").pack(pady=30)
+        
+        self.btn_studio = ctk.CTkButton(self.sidebar, text="LAUNCH STUDIO", command=self.start_studio, height=45, fg_color="#27ae60", hover_color="#2ecc71").pack(pady=10, padx=20)
+        self.btn_stop = ctk.CTkButton(self.sidebar, text="STOP SYSTEM", command=self.stop_studio, height=45, fg_color="#c0392b", hover_color="#e74c3c").pack(pady=5, padx=20)
 
-        self.setup_ui_all()
+        self.status_indicator = ctk.CTkLabel(self.sidebar, text="● SYSTEM OFFLINE", text_color="#ff4444", font=("Consolas", 12))
+        self.status_indicator.pack(pady=20)
+
+        # Telemetria UI
+        tel_f = ctk.CTkFrame(self.sidebar, fg_color="#111", corner_radius=10)
+        tel_f.pack(padx=20, pady=10, fill="x")
+        self.lbl_vram = ctk.CTkLabel(tel_f, text="VRAM: -- MB", font=("Consolas", 11)); self.lbl_vram.pack(pady=2)
+        self.lbl_cpu = ctk.CTkLabel(tel_f, text="CPU: -- %", font=("Consolas", 11)); self.lbl_cpu.pack(pady=2)
+        self.lbl_swap = ctk.CTkLabel(tel_f, text="SWAP: -- %", font=("Consolas", 11)); self.lbl_swap.pack(pady=2)
+        self.lbl_disk = ctk.CTkLabel(tel_f, text="DISK: -- GB", font=("Consolas", 11)); self.lbl_disk.pack(pady=2)
+
+        # Tabs Setup
+        self.tabs = ctk.CTkTabview(self, corner_radius=15, border_width=1, border_color="#333")
+        self.tabs.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
+        
+        self.tab_acq = self.tabs.add("ACQUISITION")
+        self.tab_gal = self.tabs.add("GALLERY")
+        self.tab_canvas = self.tabs.add("CANVAS")
+        self.tab_train = self.tabs.add("TRAINING")
+        self.tab_vault = self.tabs.add("VAULT")
+        self.tab_opt = self.tabs.add("OPTIMIZER")
+        self.tab_log = self.tabs.add("CONSOLE")
+
+        self.setup_acq_tab()
+        self.setup_gal_tab()
+        self.setup_canvas_tab()
+        self.setup_training_tab()
+        self.setup_vault_tab()
+        self.setup_optimizer_tab()
+        self.setup_console_tab()
+
         self.detect_hardware()
         self.load_config()
         self.start_loops()
 
-    def setup_ui_all(self):
-        # Sidebar
-        self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0, fg_color="#0a0a0a")
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        ctk.CTkLabel(self.sidebar, text="NEURAL COMMANDER", font=ctk.CTkFont(size=20, weight="bold", family="Consolas")).pack(pady=30)
+    def setup_acq_tab(self):
+        f = ctk.CTkFrame(self.tab_acq, fg_color="transparent"); f.pack(fill="both", expand=True, padx=20, pady=20)
         
-        self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10); self.status_box.pack(padx=15, pady=5, fill="x")
-        self.status_indicator = ctk.CTkLabel(self.status_box, text="● SYSTEM OFFLINE", text_color="#ff4444", font=ctk.CTkFont(size=12, weight="bold")); self.status_indicator.pack(pady=10)
+        # Presets
+        ctk.CTkLabel(f, text="PRESET MODELS", font=("Orbitron", 14, "bold")).grid(row=0, column=0, sticky="w", pady=10)
+        self.preset_menu = ctk.CTkOptionMenu(f, values=list(PRESET_MODELS.keys()), command=self.apply_preset, width=400, height=35)
+        self.preset_menu.grid(row=1, column=0, sticky="w", padx=5)
 
-        self.telemetry_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10); self.telemetry_box.pack(padx=15, pady=15, fill="x")
-        self.lbl_cpu = ctk.CTkLabel(self.telemetry_box, text="CPU: ---", font=("Consolas", 11)); self.lbl_cpu.pack(pady=2)
-        self.lbl_swap = ctk.CTkLabel(self.telemetry_box, text="SWAP: ---", font=("Consolas", 11), text_color="#aaa"); self.lbl_swap.pack(pady=2)
-        self.lbl_vram = ctk.CTkLabel(self.telemetry_box, text="VRAM: ---", font=("Consolas", 11)); self.lbl_vram.pack(pady=2)
-        self.lbl_disk = ctk.CTkLabel(self.telemetry_box, text="DISK: ---", font=("Consolas", 11)); self.lbl_disk.pack(pady=2)
-
-        ctk.CTkButton(self.sidebar, text="IGNITION", command=lambda: self.start_studio(), fg_color="#2d5a27", height=50).pack(padx=20, pady=10, fill="x")
-        ctk.CTkButton(self.sidebar, text="TERMINATE", command=lambda: self.stop_studio(), fg_color="#8b0000", height=50).pack(padx=20, pady=10, fill="x")
-
-        # Tabs
-        self.tabs = ctk.CTkTabview(self, segmented_button_fg_color="#0a0a0a", segmented_button_selected_color="#3b8ed0")
-        self.tabs.grid(row=0, column=1, padx=20, pady=10, sticky="nsew")
+        # Manual Entry
+        ctk.CTkLabel(f, text="MANUAL ACQUISITION (ID / REPO)", font=("Orbitron", 14, "bold")).grid(row=2, column=0, sticky="w", pady=20)
+        self.entry_id = ctk.CTkEntry(f, placeholder_text="Civitai ID or HF Repo/File", width=400, height=35)
+        self.entry_id.grid(row=3, column=0, sticky="w", padx=5)
         
-        self.tab_dl = self.tabs.add("📦 ACQUISITION"); self.tab_inv = self.tabs.add("📂 INVENTORY")
-        self.tab_gal = self.tabs.add("🖼️ GALLERY"); self.tab_canvas = self.tabs.add("🧠 CANVAS")
-        self.tab_train = self.tabs.add("🚀 TRAINING"); self.tab_log = self.tabs.add("📟 CONSOLE")
-        self.tab_opt = self.tabs.add("⚙️ OPTIMIZER"); self.tab_vault = self.tabs.add("🔒 VAULT")
+        self.option_type = ctk.CTkOptionMenu(f, values=["checkpoints", "loras", "vae", "upscalers", "controlnet"], width=150, height=35)
+        self.option_type.grid(row=3, column=1, padx=10)
 
-        self.setup_acquisition_tab()
-        self.setup_inventory_tab()
-        self.setup_gallery_tab()
-        self.setup_canvas_tab()
-        self.setup_training_tab()
-        self.setup_console_tab()
-        self.setup_optimizer_tab()
-        self.setup_vault_tab()
+        ctk.CTkButton(f, text="START DOWNLOAD", command=self.start_download, height=45, fg_color="#3498db").grid(row=4, column=0, columnspan=2, pady=30, sticky="ew")
 
-    def setup_acquisition_tab(self):
-        self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=lambda x: self.apply_preset(x), height=45); self.preset_menu.pack(padx=20, pady=20, fill="x")
-        f_mid = ctk.CTkFrame(self.tab_dl, fg_color="transparent"); f_mid.pack(fill="x", padx=20)
-        ctk.CTkButton(f_mid, text="🌐 VISIT MODEL PAGE", command=self.visit_civitai, height=40, fg_color="#1f538d").pack(side="left", expand=True, fill="x", padx=5)
-        self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI ID", height=45); self.entry_id.pack(padx=20, pady=10, fill="x")
-        self.option_type = ctk.CTkOptionMenu(self.tab_dl, values=["checkpoints", "loras", "vae", "controlnet"], height=45); self.option_type.pack(padx=20, pady=10, fill="x")
-        self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD TARGET", command=lambda: self.start_download(), height=55).pack(padx=20, pady=10, fill="x")
-        self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505"); self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
+        # Inventory
+        ctk.CTkLabel(f, text="LOCAL INVENTORY", font=("Orbitron", 14, "bold")).grid(row=0, column=2, sticky="w", padx=40)
+        self.inv_scroll = ctk.CTkScrollableFrame(f, width=500, height=500, fg_color="#050505"); self.inv_scroll.grid(row=1, column=2, rowspan=10, padx=40, sticky="nsew")
+        self.lbl_inv_total = ctk.CTkLabel(f, text="Total: 0 GB", font=("Consolas", 12)); self.lbl_inv_total.grid(row=11, column=2, sticky="e", padx=40)
+        
+        self.txt_meta = ctk.CTkTextbox(f, height=150, width=400, font=("Consolas", 11), fg_color="#111"); self.txt_meta.grid(row=5, column=0, columnspan=2, pady=10, sticky="nsew")
+        ctk.CTkButton(f, text="DELETE SELECTED MODEL", command=self.delete_model_action, height=40, fg_color="#c0392b", hover_color="#e74c3c").grid(row=6, column=0, columnspan=2, pady=5, sticky="ew")
+        ctk.CTkButton(f, text="REFRESH LIST", command=self.refresh_models_list).grid(row=12, column=2, sticky="ew", padx=40, pady=10)
 
-    def visit_civitai(self):
-        m_id = self.entry_id.get().strip()
-        if m_id: webbrowser.open(f"https://civitai.com/models/{m_id}")
-
-    def setup_inventory_tab(self):
-        f_top = ctk.CTkFrame(self.tab_inv, fg_color="transparent"); f_top.pack(fill="x", padx=10, pady=5)
-        self.entry_inv_search = ctk.CTkEntry(f_top, placeholder_text="🔍 Search...", height=35); self.entry_inv_search.pack(side="left", expand=True, fill="x", padx=5)
-        self.entry_inv_search.bind("<KeyRelease>", lambda e: self.filter_inventory())
-        ctk.CTkButton(f_top, text="REFRESH", command=lambda: self.refresh_models_list(), width=80).pack(side="left", padx=5)
-        f_main = ctk.CTkFrame(self.tab_inv, fg_color="transparent"); f_main.pack(fill="both", expand=True)
-        f_main.grid_columnconfigure(0, weight=1); f_main.grid_columnconfigure(1, weight=1)
-        self.inv_scroll = ctk.CTkScrollableFrame(f_main, label_text="ASSETS", fg_color="#050505"); self.inv_scroll.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        self.f_insight = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333"); self.f_insight.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        self.lbl_preview = ctk.CTkLabel(self.f_insight, text="Preview", width=450, height=450, fg_color="#050505"); self.lbl_preview.pack(padx=20, pady=20)
-        self.txt_meta = ctk.CTkTextbox(self.f_insight, height=200, font=("Consolas", 11), fg_color="transparent"); self.txt_meta.pack(padx=20, pady=10, fill="both", expand=True)
-        self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total: 0.00 GB", font=("Consolas", 12, "bold")); self.lbl_inv_total.pack(pady=5)
-
-    def setup_gallery_tab(self):
+    def setup_gal_tab(self):
         f_main = ctk.CTkFrame(self.tab_gal, fg_color="transparent"); f_main.pack(fill="both", expand=True)
-        f_main.grid_columnconfigure(0, weight=1); f_main.grid_columnconfigure(1, weight=1)
-        self.gal_list = ctk.CTkScrollableFrame(f_main, label_text="OUTPUT", fg_color="#050505"); self.gal_list.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        self.gal_list = ctk.CTkScrollableFrame(f_main, width=300, fg_color="#050505"); self.gal_list.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         self.f_gal_view = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333"); self.f_gal_view.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         self.lbl_gal_img = ctk.CTkLabel(self.f_gal_view, text="Select asset", width=500, height=500, fg_color="#050505"); self.lbl_gal_img.pack(padx=20, pady=20)
         self.txt_gal_meta = ctk.CTkTextbox(self.f_gal_view, height=200, font=("Consolas", 11), fg_color="transparent"); self.txt_gal_meta.pack(padx=20, pady=10, fill="both", expand=True)
-        ctk.CTkButton(self.tab_gal, text="REFRESH GALLERY", command=lambda: self.refresh_gallery(), height=40).pack(pady=10)
+        ctk.CTkButton(self.tab_gal, text="REFRESH GALLERY", command=self.refresh_gallery, height=40).pack(pady=10)
 
     def setup_canvas_tab(self):
         f_main = ctk.CTkFrame(self.tab_canvas, fg_color="transparent"); f_main.pack(fill="both", expand=True)
         self.canvas_list = ctk.CTkTextbox(f_main, font=("Consolas", 12), fg_color="#050505", width=600); self.canvas_list.pack(side="left", padx=20, pady=20, fill="both", expand=True)
-        ctk.CTkButton(self.tab_canvas, text="REFRESH", command=lambda: self.refresh_canvas(), height=40).pack(pady=10)
+        ctk.CTkButton(self.tab_canvas, text="REFRESH", command=self.refresh_canvas, height=40).pack(pady=10)
 
     def setup_training_tab(self):
         f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=10, fill="x")
         self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=35); self.train_base_model.pack(padx=20, pady=5, fill="x")
         self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=35); self.train_lora_name.pack(padx=20, pady=5, fill="x")
         self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=35); self.entry_trigger.pack(padx=20, pady=5, fill="x")
-        ctk.CTkButton(self.tab_train, text="START TRAINING", command=lambda: self.start_training(), fg_color="#FF8C00", height=50).pack(padx=20, pady=10, fill="x")
+        ctk.CTkButton(self.tab_train, text="START TRAINING", command=self.start_training, fg_color="#FF8C00", height=50).pack(padx=20, pady=10, fill="x")
         self.log_train = ctk.CTkTextbox(self.tab_train, height=200, font=("Consolas", 11), fg_color="#050505"); self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
 
     def setup_console_tab(self):
@@ -219,21 +209,23 @@ class App(ctk.CTk):
 
     def setup_optimizer_tab(self):
         f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333"); f.pack(padx=40, pady=20, fill="both", expand=True)
-        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=450, height=40); self.gpu_picker.pack(pady=5)
-        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=450, height=40); self.ram_menu.pack(pady=5)
+        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detectando..."], command=self.set_profile, width=450, height=40); self.gpu_picker.pack(pady=5)
+        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=self.set_ram_profile, width=450, height=40); self.ram_menu.pack(pady=5)
         self.entry_expert = ctk.CTkEntry(f, placeholder_text="Expert Flags...", height=45, width=450); self.entry_expert.pack(pady=5)
-        self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
+        self.entry_expert.bind("<KeyRelease>", self.update_expert_flags)
         self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=600); self.lbl_flags.pack(pady=25)
 
     def setup_vault_tab(self):
         f = ctk.CTkFrame(self.tab_vault, fg_color="transparent"); f.pack(padx=30, pady=30, fill="both", expand=True)
-        self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste API Key...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
-        ctk.CTkButton(f, text="SAVE", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
-        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
+        self.api_provider = ctk.CTkOptionMenu(f, values=["Civitai (API Key)", "Hugging Face (Token)"], height=40)
+        self.api_provider.pack(fill="x", pady=5)
+        self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste Key/Token here...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
+        ctk.CTkButton(f, text="AUTHORIZE & SAVE", command=self.save_api_key, height=45, fg_color="#2c3e50", hover_color="#34495e").pack(fill="x", pady=10)
+        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED VAULT", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
 
     # --- REFRESH LOGIC ---
     def refresh_optimizer_ui(self):
-        if not self.gpu_picker: return
+        if not hasattr(self, 'gpu_picker') or not self.gpu_picker: return
         models = list(GPU_DATABASE.get("NVIDIA").keys()) if self.detected_vendor == "NVIDIA" else list(GPU_DATABASE.get("AMD").keys())
         self.gpu_picker.configure(values=models)
         if models:
@@ -241,20 +233,20 @@ class App(ctk.CTk):
             self.gpu_picker.set(d); self.set_profile(d)
 
     def refresh_models_list(self):
-        if not self.inv_scroll: return
+        if not hasattr(self, 'inv_scroll') or not self.inv_scroll: return
         for w in self.inv_scroll.winfo_children(): w.destroy()
         total_size = 0
         if MODELS_DIR.exists():
             for root, dirs, files in os.walk(MODELS_DIR):
                 for f in files:
-                    if f.endswith((".safetensors", ".ckpt")):
+                    if f.endswith((".safetensors", ".ckpt", ".gguf")):
                         path = Path(root) / f; f_size = os.path.getsize(path) / (1024**3); total_size += f_size
                         btn = ctk.CTkButton(self.inv_scroll, text=f"● {f} ({f_size:.2f} GB)", anchor="w", fg_color="transparent", hover_color="#222", command=lambda p=path, n=f, s=f_size: self.load_model_insight(p, n, s))
                         btn.pack(fill="x", pady=1)
         self.lbl_inv_total.configure(text=f"Total: {total_size:.2f} GB")
 
     def refresh_gallery(self):
-        if not self.gal_list: return
+        if not hasattr(self, 'gal_list') or not self.gal_list: return
         for w in self.gal_list.winfo_children(): w.destroy()
         if not OUTPUT_DIR.exists(): return
         files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.lower().endswith((".png", ".jpg", ".webp", ".mp4", ".webm", ".gif"))], reverse=True)
@@ -264,19 +256,47 @@ class App(ctk.CTk):
             btn.pack(fill="x", pady=1)
 
     def refresh_canvas(self):
-        if not self.canvas_list: return
+        if not hasattr(self, 'canvas_list') or not self.canvas_list: return
         self.canvas_list.delete("1.0", "end")
         if WORKFLOWS_DIR.exists():
             for f in sorted(os.listdir(WORKFLOWS_DIR)):
                 if f.endswith(".json"): self.canvas_list.insert("end", f"⚡ {f}\n")
 
     def refresh_api_ui(self):
-        if not self.api_list_frame: return
+        if not hasattr(self, "api_list_frame") or not self.api_list_frame: return
         for w in self.api_list_frame.winfo_children(): w.destroy()
-        for key in self.saved_apis:
-            f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
-            ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
-            ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
+        if not self.saved_apis:
+            ctk.CTkLabel(self.api_list_frame, text="No keys in vault.", text_color="#555").pack(pady=20)
+        else:
+            for item in self.saved_apis:
+                provider = item.get("provider", "Civitai") if isinstance(item, dict) else "Civitai"
+                key = item.get("key", item) if isinstance(item, dict) else item
+                f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a", height=45)
+                f.pack(fill="x", pady=2, padx=5)
+                color = "#3498db" if "Hugging" in provider else "#e67e22"
+                ctk.CTkLabel(f, text=f"[{provider.upper()}]", font=("Consolas", 11, "bold"), text_color=color).pack(side="left", padx=10)
+                ctk.CTkLabel(f, text=f"{key[:6]}...{key[-4:]}", font=("Consolas", 12)).pack(side="left", padx=5)
+                ctk.CTkButton(f, text="REVOKE", width=60, height=24, fg_color="#c0392b", hover_color="#e74c3c", command=lambda k=item: self.remove_api_key(k)).pack(side="right", padx=10)
+        self.api_list_frame.update()
+
+    def save_api_key(self):
+        key = self.entry_api.get().strip()
+        provider = self.api_provider.get()
+        if "Hugging" in provider and not key.startswith("hf_"):
+            messagebox.showerror("Vault Error", "Hugging Face tokens must start with 'hf_'")
+            return
+        if len(key) < 20:
+            messagebox.showerror("Vault Error", "Key seems too short to be valid.")
+            return
+        new_entry = {"provider": provider, "key": key}
+        if new_entry not in self.saved_apis:
+            self.saved_apis.append(new_entry)
+            self.persist_config()
+            self.refresh_api_ui()
+        self.entry_api.delete(0, "end")
+
+    def remove_api_key(self, key):
+        if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
 
     # --- CORE LÓGICA ---
     def detect_hardware(self):
@@ -294,7 +314,7 @@ class App(ctk.CTk):
             with open(CONFIG_FILE, 'r') as f:
                 d = json.load(f); self.saved_apis = d.get("api_keys", []); self.active_profile = d.get("hw_profile", ""); self.expert_flags = d.get("expert_flags", "")
             self.refresh_api_ui(); self.refresh_optimizer_ui()
-            if self.expert_flags: self.entry_expert.insert(0, self.expert_flags)
+            if self.expert_flags: self.entry_expert.delete(0, "end"); self.entry_expert.insert(0, self.expert_flags)
         except: pass
 
     def persist_config(self):
@@ -360,33 +380,67 @@ class App(ctk.CTk):
     def start_console_stream(self):
         while self.console_active:
             if ENGINE_LOG.exists():
-                with open(ENGINE_LOG, "r") as f:
-                    f.seek(0, 2)
+                with open(ENGINE_LOG, "r", encoding="utf-8", errors="ignore") as f:
+                    lines = f.readlines()
+                    for line in lines[-100:]:
+                        self.console_box.insert("end", line)
+                    self.console_box.see("end")
                     while self.console_active:
                         line = f.readline()
-                        if line: self.console_box.insert("end", line); self.console_box.see("end")
-                        else: time.sleep(0.5)
-            else: time.sleep(2)
+                        if line:
+                            self.console_box.insert("end", line)
+                            self.console_box.see("end")
+                        else:
+                            time.sleep(0.2)
+            else:
+                time.sleep(1)
 
     def apply_preset(self, choice):
         p = PRESET_MODELS.get(choice)
-        if p and p.get("id"): self.entry_id.delete(0, "end"); self.entry_id.insert(0, p["id"]); self.option_type.set(p["type"])
-    def set_profile(self, choice): self.active_profile = choice; self.persist_config()
-    def set_ram_profile(self, choice): self.active_ram_profile = choice; self.persist_config()
-    def update_expert_flags(self): self.expert_flags = self.entry_expert.get().strip(); self.persist_config()
-    def remove_api_key(self, key):
-        if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
-    def save_api_key(self):
-        key = self.entry_api.get().strip()
-        if len(key) >= 15: self.saved_apis.append(key); self.persist_config(); self.refresh_api_ui()
-        self.entry_api.delete(0, "end")
+        if p:
+            self.active_preset = p
+            if p.get("source") == "hf":
+                self.entry_id.delete(0, "end")
+                self.entry_id.insert(0, f"{p['repo']}/{p['file']}")
+            else:
+                self.entry_id.delete(0, "end")
+                self.entry_id.insert(0, p.get("id", ""))
+            self.option_type.set(p["type"])
+
     def start_download(self):
         m_id = self.entry_id.get().strip(); threading.Thread(target=self.run_downloader, args=(m_id, self.option_type.get()), daemon=True).start()
+
     def run_downloader(self, m_id, m_type):
         py = get_short_path(VENV_PATH / ("bin/python3" if os.name != "nt" else "bin/python.exe"))
-        dl = get_short_path(TOOLS_DIR / "downloader.py"); cmd = [str(py), str(dl), m_id, m_type]; env = os.environ.copy()
-        if self.saved_apis: env["CIVITAI_API_KEY"] = self.saved_apis[-1]
-        subprocess.Popen(cmd, env=env).wait(); self.after(500, self.refresh_models_list)
+        p = getattr(self, "active_preset", {})
+        if p.get("source") == "hf":
+            dl = get_short_path(TOOLS_DIR / "hf_downloader.py")
+            cmd = [str(py), str(dl), p["repo"], p["file"], m_type]
+        else:
+            dl = get_short_path(TOOLS_DIR / "downloader.py")
+            cmd = [str(py), str(dl), m_id, m_type]
+        
+        env = os.environ.copy()
+        # Buscar chave correta no Vault
+        for item in self.saved_apis:
+            if isinstance(item, dict):
+                if p.get("source") == "hf" and "Hugging" in item["provider"]:
+                    env["HUGGING_FACE_HUB_TOKEN"] = item["key"]
+                elif p.get("source") == "civitai" and "Civitai" in item["provider"]:
+                    env["CIVITAI_API_KEY"] = item["key"]
+        
+        try:
+            with open(ENGINE_LOG, "a") as f:
+                f.write(f"\n[*] INICIANDO AQUISIÇÃO: {m_id} ({m_type})\n")
+                f.flush()
+                process = subprocess.Popen(cmd, env=env, stdout=f, stderr=f, bufsize=1, universal_newlines=True)
+                process.wait()
+                f.write(f"\n[V] PROCESSO DE AQUISIÇÃO FINALIZADO.\n")
+        except Exception as e:
+            with open(ENGINE_LOG, "a") as f:
+                f.write(f"\n[X] ERRO CRÍTICO NO LAUNCHER: {str(e)}\n")
+        self.after(500, self.refresh_models_list)
+
     def dataset_wizard(self): messagebox.showinfo("Wizard", "Pronto!")
     def start_training(self): pass
     def load_model_insight(self, path, name, size):
@@ -396,8 +450,26 @@ class App(ctk.CTk):
     def load_gallery_item(self, path):
         self.active_gallery_path = path
         self.txt_gal_meta.delete("1.0", "end"); self.txt_gal_meta.insert("end", f"FILE: {path.name}")
+    def delete_model_action(self):
+        if not hasattr(self, 'active_model_path') or not self.active_model_path:
+            messagebox.showwarning("Warning", "Select a model first!")
+            return
+        if messagebox.askyesno("Confirm Delete", f"DANGER: Are you sure you want to permanently delete:\n{self.active_model_path.name}?"):
+            try:
+                os.remove(self.active_model_path)
+                preview = self.active_model_path.with_suffix(".preview.png")
+                if preview.exists(): os.remove(preview)
+                messagebox.showinfo("Success", "Model deleted successfully!")
+                self.active_model_path = None
+                self.txt_meta.delete("1.0", "end")
+                self.refresh_models_list()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete model: {e}")
+    
+    def set_profile(self, choice): self.active_profile = choice; self.persist_config()
+    def set_ram_profile(self, choice): self.active_ram_profile = choice; self.persist_config()
+    def update_expert_flags(self, event=None): self.expert_flags = self.entry_expert.get().strip(); self.persist_config()
     def delete_gallery_item(self): pass
-    def delete_model_action(self): pass
     def filter_inventory(self): pass
 
 if __name__ == "__main__":
