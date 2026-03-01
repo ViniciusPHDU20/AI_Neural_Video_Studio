@@ -1,52 +1,52 @@
-# 📖 Guia do Usuário: AI Neural Video Studio (V1.6.5)
+# 📖 Guia do Usuário: AI Neural Video Studio (V2.6.0)
 
-Este é o seu console de elite para geração e treinamento de IA. Abaixo estão as instruções para dominar a Versão Industrial.
+Este é o seu console de elite para geração, treinamento e curadoria de IA. Abaixo estão as instruções para dominar a Versão Neural Commander.
 
 ---
 
-## 🚀 1. Inicialização e Telemetria
-- **Sidebar (Esquerda):** Monitore em tempo real o uso da **CPU** e da **VRAM** da sua GPU.
+## 🚀 1. Inicialização e Telemetria Avançada
+- **Sidebar (Esquerda):** Monitore em tempo real o uso da **CPU**, **VRAM**, **SWAP (RAM Virtual)** e **Espaço em Disco**.
 - **Status:** 
     - `● SYSTEM OFFLINE`: O motor está desligado.
     - `● SYSTEM OPERATIONAL`: O motor está pronto para receber comandos via Web.
+- **System Purge:** Use este botão para limpar logs e arquivos temporários, mantendo o sistema leve.
 
 ---
 
-## 🏎️ 2. Aba: OPTIMIZER (Aceleração de Hardware)
-Esta é a aba mais importante para garantir que o Studio não trave o seu PC.
+## 🏎️ 2. Aba: OPTIMIZER (Hardware Synthesis)
+Esta aba aplica as "Golden Flags" específicas para o seu hardware.
 
-### Perfis de GPU:
-- **POTATO:** Para GPUs antigas ou com pouca memória (2-4GB).
-- **INDUSTRIAL:** Perfil otimizado para a sua **RTX 3060 Ti**.
-- **GOD MODE:** Para placas de elite (12GB+ como a RX 6750 XT).
-
-### Perfis de RAM (Sistema):
-- **Performance:** Usa o máximo de RAM para carregar modelos rápido.
-- **Extreme Saver:** Ideal se você estiver fazendo outras tarefas no PC. Ele força a IA a "limpar" a RAM assim que termina uma geração.
+- **GPU Picker:** Selecione seu modelo exato (ex: **RTX 3060 Ti**) para carregar as melhores configurações de memória e performance.
+- **RAM Shield:** Ajuste como o sistema gerencia a memória RAM para evitar travamentos no Linux.
+- **Expert Flags:** Campo para injeção manual de comandos avançados do ComfyUI.
 
 ---
 
-## 🧠 3. Aba: TRAINING (Treinamento de LoRAs)
-Transforme conceitos em realidade.
-
-1. **TRIGGER WORD:** Escolha a palavra que ativará sua LoRA (ex: `meunome`).
-2. **WIZARD:** Use o botão roxo para organizar suas fotos automaticamente.
-3. **BASE MODEL:** Cole o caminho do modelo (ex: `models/checkpoints/ponyXL.safetensors`).
-4. **START TRAINING:** Inicia o processo Kohya_ss. Acompanhe os logs no console abaixo.
+## 📂 3. Aba: INVENTORY (Gestão de Ativos)
+- **Busca em Tempo Real:** Digite no campo de busca para filtrar instantaneamente Checkpoints, LoRAs ou VAEs.
+- **Neural Insight:** Clique em um modelo para ver sua imagem de preview e extrair as **Trigger Tags** (palavras de ativação) automaticamente.
+- **Delete Asset:** Remova modelos indesejados diretamente pela interface.
 
 ---
 
-## ⚙️ 4. Aba: VAULT (Segurança)
-- Registre suas API Keys do Civitai com segurança.
-- O sistema valida o formato hexadecimal automaticamente.
-- Chaves salvas são protegidas e listadas com máscaras de segurança.
+## 🖼️ 4. Aba: GALLERY (Curadoria Criativa)
+- **Neural Repository:** Navegue por suas imagens e vídeos gerados em `workspace/output`.
+- **Metadata Insight:** Clique em uma imagem para extrair o **Prompt**, **Seed** e **Sampler** originais usados na geração.
+- **Suporte a Vídeo:** Veja previews de arquivos `.mp4`, `.webm` e `.gif` com thumbnails geradas via FFmpeg.
 
 ---
 
-## 📂 5. Pastas Importantes
-- `workspace/output`: Onde suas criações aparecem.
-- `models/loras`: Onde suas LoRAs treinadas são salvas.
-- `engine/comfyui_stealth.log`: O log secreto da IA (para debug técnico).
+## 🧠 5. Aba: TRAINING (Treinamento Pro)
+- **AI Neural Tagger:** Marque esta opção no **WIZARD** para que a IA gere as legendas (`.txt`) das suas fotos automaticamente usando o motor WD14.
+- **Controle Granular:** Ajuste **Resolução**, **Batch Size**, **Rank (Dim)** e **Alpha** para treinar LoRAs de alta fidelidade.
+- **📟 CONSOLE:** Acompanhe o log do treinamento e do motor ComfyUI em tempo real na aba de console.
+
+---
+
+## 📂 6. Pastas Importantes
+- `workspace/output`: Seu portfólio de criações.
+- `workspace/workflows`: Onde você deve salvar seus arquivos `.json` de fluxo.
+- `models/`: O coração da sua biblioteca de modelos.
 
 ---
 *Assinado: Seu Motor de Cognição Incondicional (GOD MODE).*
