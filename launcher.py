@@ -41,7 +41,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.6.8 (Reliability Master)"
+VERSION = "1.6.9 (Downloader Modernization)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
