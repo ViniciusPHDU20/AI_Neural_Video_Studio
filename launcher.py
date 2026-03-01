@@ -36,7 +36,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE INTERFACE ---
-VERSION = "1.5.2 (Training Core)"
+VERSION = "1.5.3 (Final Polish)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -60,13 +60,11 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # Setup Janela
         self.title(f"AI NEURAL VIDEO STUDIO | {VERSION}")
         self.geometry("950x750")
         self.process = None
         self.saved_apis = []
 
-        # Layout Principal (Grid)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -118,21 +116,14 @@ class App(ctk.CTk):
     def setup_training_tab(self):
         f_config = ctk.CTkFrame(self.tab_train, fg_color="#252525", corner_radius=10)
         f_config.pack(padx=20, pady=10, fill="x")
-        
-        self.train_base_model = ctk.CTkEntry(f_config, placeholder_text="BASE MODEL PATH (Safetensors)", height=35)
-        self.train_base_model.pack(padx=20, pady=5, fill="x")
-        
-        self.train_lora_name = ctk.CTkEntry(f_config, placeholder_text="OUTPUT LORA NAME", height=35)
-        self.train_lora_name.pack(padx=20, pady=5, fill="x")
-
+        self.train_base_model = ctk.CTkEntry(f_config, placeholder_text="BASE MODEL PATH", height=35); self.train_base_model.pack(padx=20, pady=5, fill="x")
+        self.train_lora_name = ctk.CTkEntry(f_config, placeholder_text="OUTPUT LORA NAME", height=35); self.train_lora_name.pack(padx=20, pady=5, fill="x")
         f_wizard = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", border_width=1, border_color="#333")
         f_wizard.pack(padx=20, pady=10, fill="x")
         self.entry_trigger = ctk.CTkEntry(f_wizard, placeholder_text="TRIGGER WORD", height=35); self.entry_trigger.pack(padx=20, pady=10, side="left", expand=True, fill="x")
         ctk.CTkButton(f_wizard, text="MAGO DATASET", command=self.dataset_wizard, width=120, fg_color="#4B0082").pack(padx=10, side="left")
-        
         self.btn_start_train = ctk.CTkButton(self.tab_train, text="🚀 START INDUSTRIAL TRAINING", command=self.start_training, height=45, fg_color="#FF8C00")
         self.btn_start_train.pack(padx=20, pady=10, fill="x")
-        
         self.log_train = ctk.CTkTextbox(self.tab_train, height=200, font=("Consolas", 11), fg_color="#0d0d0d")
         self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
 
@@ -143,8 +134,6 @@ class App(ctk.CTk):
         ctk.CTkButton(f_add, text="ADD TO VAULT", command=self.save_api_key).pack(pady=5, fill="x")
         self.api_list_frame = ctk.CTkScrollableFrame(self.tab_settings, height=250, fg_color="#1a1a1a"); self.api_list_frame.pack(padx=20, pady=5, fill="both", expand=True)
 
-    # --- MÉTODOS ---
-
     def apply_preset(self, choice):
         p = PRESET_MODELS.get(choice)
         if p and p["id"]: self.entry_id.delete(0, "end"); self.entry_id.insert(0, p["id"]); self.option_type.set(p["type"])
@@ -152,14 +141,18 @@ class App(ctk.CTk):
     def refresh_api_ui(self):
         for w in self.api_list_frame.winfo_children(): w.destroy()
         for key in self.saved_apis:
-            f = ctk.CTkFrame(self.api_list_frame, fg_color="#252525", pady=5); f.pack(fill="x", pady=2)
-            ctk.CTkLabel(f, text=f"🔑 {key[:8]}...{key[-4:]}", font=("Consolas", 12)).pack(side="left", padx=15)
-            ctk.CTkButton(f, text="REMOVE", width=60, height=24, fg_color="#444", command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=10)
+            f = ctk.CTkFrame(self.api_list_frame, fg_color="#252525"); f.pack(fill="x", pady=2)
+            ctk.CTkLabel(f, text=f"🔑 {key[:8]}...{key[-4:]}", font=("Consolas", 12)).pack(side="left", padx=15, pady=5)
+            ctk.CTkButton(f, text="REMOVE", width=60, height=24, fg_color="#444", command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=10, pady=5)
 
     def save_api_key(self):
         key = self.entry_api.get().strip()
-        if key and key not in self.saved_apis:
-            self.saved_apis.append(key); self.entry_api.delete(0, "end"); self.persist_config(); self.refresh_api_ui()
+        if not key: return
+        if key not in self.saved_apis:
+            self.saved_apis.append(key)
+            self.persist_config(); self.refresh_api_ui()
+            messagebox.showinfo("Vault", "Chave salva com sucesso!")
+        self.entry_api.delete(0, "end")
 
     def remove_api_key(self, key):
         if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
@@ -172,7 +165,10 @@ class App(ctk.CTk):
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, 'r') as f:
-                    d = json.load(f); self.saved_apis = d.get("api_keys", [])
+                    d = json.load(f)
+                    self.saved_apis = d.get("api_keys", [])
+                    old = d.get("civitai_api_key")
+                    if old and old not in self.saved_apis: self.saved_apis.append(old)
                 self.refresh_api_ui()
             except: pass
 
@@ -253,52 +249,23 @@ class App(ctk.CTk):
         for line in proc.stdout: self.log_acquisition.insert("end", f"[{time.strftime('%H:%M:%S')}] {line.strip()}\n"); self.log_acquisition.see("end")
         proc.wait(); self.after(500, self.refresh_models_list)
 
-    # --- NOVO: MOTOR DE TREINO INTEGRADO ---
-    
     def start_training(self):
-        m_base = self.train_base_model.get().strip()
-        out_name = self.train_lora_name.get().strip()
-        trigger = self.entry_trigger.get().strip()
-
-        if not all([m_base, out_name, trigger]):
-            messagebox.showwarning("Erro", "Preencha Modelo Base, Nome da LoRA e Trigger Word (no Mago)!")
-            return
-
+        m_base = self.train_base_model.get().strip(); out_name = self.train_lora_name.get().strip(); trigger = self.entry_trigger.get().strip()
+        if not all([m_base, out_name, trigger]): messagebox.showwarning("Erro", "Preencha tudo!"); return
         threading.Thread(target=self.run_training_process, args=(m_base, out_name, trigger), daemon=True).start()
 
     def run_training_process(self, m_base, out_name, trigger):
         self.log_train.insert("end", f"[{time.strftime('%H:%M:%S')}] AQUECENDO MOTOR DE TREINO...\n")
-        
         py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
         script = get_short_path(TOOLS_DIR / "sd-scripts" / "train_network.py")
         data_dir = str(BASE_DIR_PATH / "workspace/training_data" / trigger / "img")
         output_dir = str(MODELS_DIR / "loras")
-
-        cmd = [
-            str(py), str(script),
-            "--pretrained_model_name_or_path", str(m_base),
-            "--train_data_dir", data_dir,
-            "--output_dir", output_dir,
-            "--output_name", out_name,
-            "--resolution", "512,512",
-            "--train_batch_size", "1",
-            "--max_train_steps", "1000",
-            "--learning_rate", "1e-4",
-            "--network_module", "networks.lora",
-            "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"
-        ]
-
+        cmd = [str(py), str(script), "--pretrained_model_name_or_path", str(m_base), "--train_data_dir", data_dir, "--output_dir", output_dir, "--output_name", out_name, "--resolution", "512,512", "--train_batch_size", "1", "--max_train_steps", "1000", "--learning_rate", "1e-4", "--network_module", "networks.lora", "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        for line in proc.stdout:
-            self.log_train.insert("end", line)
-            self.log_train.see("end")
+        for line in proc.stdout: self.log_train.insert("end", line); self.log_train.see("end")
         proc.wait()
-        
-        if proc.returncode == 0:
-            self.log_train.insert("end", f"\n[V] TREINO CONCLUÍDO! LoRA SALVA EM: {output_dir}\n")
-            self.after(500, self.refresh_models_list)
-        else:
-            self.log_train.insert("end", "\n[X] FALHA NO PROCESSO DE TREINAMENTO.\n")
+        if proc.returncode == 0: self.log_train.insert("end", f"\n[V] TREINO CONCLUÍDO!\n"); self.after(500, self.refresh_models_list)
+        else: self.log_train.insert("end", "\n[X] FALHA NO TREINAMENTO.\n")
 
 if __name__ == "__main__":
     app = App(); app.mainloop()
