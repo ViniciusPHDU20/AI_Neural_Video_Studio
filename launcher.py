@@ -3,51 +3,40 @@ import sys
 import subprocess
 import ctypes
 from pathlib import Path
-
-# --- AUTO-CORREÇÃO DE AMBIENTE (GOD MODE) ---
-BASE_DIR = Path(__file__).parent.absolute()
-
-def get_short_path(path):
-    if os.name != "nt":
-        return str(path)
-    try:
-        output_buf = ctypes.create_unicode_buffer(1024)
-        ctypes.windll.kernel32.GetShortPathNameW(str(path), output_buf, 1024)
-        return output_buf.value
-    except:
-        return str(path)
-
-BASE_DIR_PATH = Path(get_short_path(BASE_DIR))
-VENV_PATH = BASE_DIR_PATH / ".venv"
-
-def check_venv():
-    if hasattr(sys, 'real_prefix') or (sys.base_prefix != sys.prefix):
-        return
-    
-    if os.name == "nt":
-        venv_python = VENV_PATH / "Scripts" / "python.exe"
-    else:
-        venv_python = VENV_PATH / "bin" / "python3"
-
-    if venv_python.exists():
-        print(f"[*] Reiniciando via Ambiente Virtual: {venv_python}")
-        subprocess.Popen([str(venv_python)] + sys.argv)
-        sys.exit(0)
-
-check_venv()
-# --------------------------------------------
-
 import tkinter as tk
 import customtkinter as ctk
 import threading
 import json
 import socket
 import shutil
+import time
 from tkinter import messagebox
 
-VERSION = "1.4.0 (Engine Recovery Patch)"
+# --- AUTO-CORREÇÃO DE AMBIENTE (GOD MODE) ---
+BASE_DIR = Path(__file__).parent.absolute()
 
-# Configurações de Estilo Moderno
+def get_short_path(path):
+    if os.name != "nt": return str(path)
+    try:
+        output_buf = ctypes.create_unicode_buffer(1024)
+        ctypes.windll.kernel32.GetShortPathNameW(str(path), output_buf, 1024)
+        return output_buf.value
+    except: return str(path)
+
+BASE_DIR_PATH = Path(get_short_path(BASE_DIR))
+VENV_PATH = BASE_DIR_PATH / ".venv"
+
+def check_venv():
+    if hasattr(sys, 'real_prefix') or (sys.base_prefix != sys.prefix): return
+    venv_python = VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3")
+    if venv_python.exists():
+        subprocess.Popen([str(venv_python)] + sys.argv)
+        sys.exit(0)
+
+check_venv()
+
+# --- CONFIGURAÇÕES DE INTERFACE ---
+VERSION = "1.5.0 (Industrial Edition)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -57,243 +46,295 @@ ENGINE_DIR = BASE_DIR_PATH / "engine"
 MODELS_DIR = BASE_DIR_PATH / "models"
 CONFIG_FILE = BASE_DIR_PATH / "config" / "user_config.json"
 
-# Banco de Dados de Modelos Recomendados
 PRESET_MODELS = {
-    "Selecione um Preset...": {"id": "", "type": "checkpoints", "nsfw": False},
-    "[BASE] Pony Diffusion V6 XL": {"id": "290640", "type": "checkpoints", "nsfw": True},
-    "[BASE] RealVisXL V4.0 (Realismo)": {"id": "139562", "type": "checkpoints", "nsfw": False},
-    "[BASE] Juggernaut XL (Cinematic)": {"id": "133005", "type": "checkpoints", "nsfw": False},
-    "[LORA] Realistic Skin & Details": {"id": "356417", "type": "loras", "nsfw": False},
-    "[LORA] Cinematic Lighting": {"id": "341513", "type": "loras", "nsfw": False},
-    "[LORA] Detailed Anatomy XL": {"id": "364522", "type": "loras", "nsfw": True},
-    "[VAE] SDXL Official VAE": {"id": "290640", "type": "vae", "nsfw": False}
+    "Selecione um Preset de Engenharia...": {"id": "", "type": "checkpoints"},
+    "● [BASE] Pony Diffusion V6 XL": {"id": "290640", "type": "checkpoints"},
+    "● [BASE] RealVisXL V4.0 (Photo)": {"id": "139562", "type": "checkpoints"},
+    "● [BASE] Juggernaut XL (Cinema)": {"id": "133005", "type": "checkpoints"},
+    "● [LORA] Realistic Skin Details": {"id": "356417", "type": "loras"},
+    "● [LORA] Cinematic Lighting": {"id": "341513", "type": "loras"},
+    "● [VAE] SDXL Official VAE": {"id": "290640", "type": "vae"}
 }
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title(f"AI Neural Video Studio V{VERSION} - Recovery Mode")
-        self.geometry("850x650")
+        # Setup Janela
+        self.title(f"AI NEURAL VIDEO STUDIO | {VERSION}")
+        self.geometry("950x700")
         self.process = None
+        self.saved_apis = []
 
-        # Grid layout
+        # Layout Principal (Grid)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Sidebar
-        self.sidebar_frame = ctk.CTkFrame(self, width=180, corner_radius=0)
-        self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
+        # --- SIDEBAR (CONTROLE DE SISTEMA) ---
+        self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0, fg_color="#1a1a1a")
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
         
-        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="AI STUDIO", font=ctk.CTkFont(size=22, weight="bold"))
-        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        self.lbl_logo = ctk.CTkLabel(self.sidebar, text="NEURAL CORE", font=ctk.CTkFont(size=20, weight="bold", family="Consolas"))
+        self.lbl_logo.pack(pady=30)
+
+        self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#252525", corner_radius=8)
+        self.status_box.pack(padx=15, pady=10, fill="x")
         
-        self.status_indicator = ctk.CTkLabel(self.sidebar_frame, text="● ENGINE OFFLINE", text_color="red", font=ctk.CTkFont(size=14, weight="bold"))
-        self.status_indicator.grid(row=1, column=0, padx=20, pady=10)
+        self.status_indicator = ctk.CTkLabel(self.status_box, text="● SYSTEM OFFLINE", text_color="#ff4444", font=ctk.CTkFont(size=12, weight="bold"))
+        self.status_indicator.pack(pady=10)
 
-        self.start_button = ctk.CTkButton(self.sidebar_frame, text="LIGAR ENGINE", command=self.start_studio, fg_color="#228B22", hover_color="#006400")
-        self.start_button.grid(row=2, column=0, padx=20, pady=10)
+        self.btn_start = ctk.CTkButton(self.sidebar, text="START ENGINE", command=self.start_studio, fg_color="#2d5a27", hover_color="#1e3d1a", font=ctk.CTkFont(weight="bold"))
+        self.btn_start.pack(padx=20, pady=10, fill="x")
 
-        self.stop_button = ctk.CTkButton(self.sidebar_frame, text="DESLIGAR", command=self.stop_studio, fg_color="#B22222", hover_color="#8B0000")
-        self.stop_button.grid(row=3, column=0, padx=20, pady=10)
+        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE", command=self.stop_studio, fg_color="#8b0000", hover_color="#5a0000", font=ctk.CTkFont(weight="bold"))
+        self.btn_stop.pack(padx=20, pady=10, fill="x")
 
-        # Main Content
-        self.tabview = ctk.CTkTabview(self, width=600)
-        self.tabview.grid(row=0, column=1, padx=(20, 20), pady=(20, 20), sticky="nsew")
-        self.tabview.add("Download")
-        self.tabview.add("Gerenciar Modelos")
-        self.tabview.add("Treinamento LoRA")
-        self.tabview.add("Configurações")
+        self.lbl_info = ctk.CTkLabel(self.sidebar, text=f"Station: ViniciusPHDU\nOS: {sys.platform.upper()}\nVersion: {VERSION}", justify="left", font=ctk.CTkFont(size=10), text_color="gray")
+        self.lbl_info.pack(side="bottom", pady=20)
 
-        # Tab 1: Download
-        self.preset_menu = ctk.CTkOptionMenu(self.tabview.tab("Download"), values=list(PRESET_MODELS.keys()), command=self.apply_preset)
-        self.preset_menu.pack(pady=10, padx=20, fill="x")
-        self.model_id_entry = ctk.CTkEntry(self.tabview.tab("Download"), placeholder_text="ID do Civitai Manual", height=35)
-        self.model_id_entry.pack(pady=10, padx=20, fill="x")
-        self.model_type_option = ctk.CTkOptionMenu(self.tabview.tab("Download"), values=["checkpoints", "loras", "vae", "controlnet"])
-        self.model_type_option.pack(pady=5, padx=20, fill="x")
-        self.download_btn = ctk.CTkButton(self.tabview.tab("Download"), text="BAIXAR MODELO", command=self.start_download, height=40)
-        self.download_btn.pack(pady=20, padx=20)
-        self.log_textbox = ctk.CTkTextbox(self.tabview.tab("Download"), height=180, font=("Consolas", 12))
-        self.log_textbox.pack(pady=10, padx=20, fill="both", expand=True)
-
-        # Tab 2: Gerenciar
-        self.models_listbox = ctk.CTkTextbox(self.tabview.tab("Gerenciar Modelos"), height=250)
-        self.models_listbox.pack(pady=10, padx=20, fill="both", expand=True)
-        self.refresh_models_btn = ctk.CTkButton(self.tabview.tab("Gerenciar Modelos"), text="ATUALIZAR LISTA", command=self.refresh_models_list)
-        self.refresh_models_btn.pack(pady=10)
-
-        # Tab: Treinamento LoRA
-        self.wizard_trigger = ctk.CTkEntry(self.tabview.tab("Treinamento LoRA"), placeholder_text="Palavra-Gatilho (ex: meunome)")
-        self.wizard_trigger.pack(pady=10, padx=20, fill="x")
-        self.wizard_btn = ctk.CTkButton(self.tabview.tab("Treinamento LoRA"), text="CRIAR DATASET AUTOMÁTICO", command=self.dataset_wizard, fg_color="#4B0082")
-        self.wizard_btn.pack(pady=5, padx=20, fill="x")
-        self.train_btn = ctk.CTkButton(self.tabview.tab("Treinamento LoRA"), text="INICIAR TREINAMENTO", command=self.start_training, fg_color="#FF8C00")
-        self.train_btn.pack(pady=10, padx=20, fill="x")
-        self.train_log = ctk.CTkTextbox(self.tabview.tab("Treinamento LoRA"), height=150, font=("Consolas", 12))
-        self.train_log.pack(pady=10, padx=20, fill="both", expand=True)
-
-        # Tab 3: Configurações
-        self.api_key_entry = ctk.CTkEntry(self.tabview.tab("Configurações"), placeholder_text="Insira sua API Key...", show="*", height=35)
-        self.api_key_entry.pack(pady=20, padx=20, fill="x")
-        self.save_config_btn = ctk.CTkButton(self.tabview.tab("Configurações"), text="SALVAR CONFIGURAÇÕES", command=self.save_config)
-        self.save_config_btn.pack(pady=20)
+        # --- CONTEÚDO PRINCIPAL ---
+        self.tabs = ctk.CTkTabview(self, segmented_button_fg_color="#1a1a1a", segmented_button_selected_color="#3b8ed0")
+        self.tabs.grid(row=0, column=1, padx=20, pady=10, sticky="nsew")
         
+        self.tab_dl = self.tabs.add("📦 ACQUISITION")
+        self.tab_models = self.tabs.add("📂 INVENTORY")
+        self.tab_train = self.tabs.add("🧠 TRAINING")
+        self.tab_settings = self.tabs.add("⚙️ VAULT")
+
+        self.setup_acquisition_tab()
+        self.setup_inventory_tab()
+        self.setup_training_tab()
+        self.setup_vault_tab()
+
+        # Iniciar Loops
         self.load_config()
         self.check_status_loop()
         self.refresh_models_list()
 
-    def log(self, message):
-        self.log_textbox.insert("end", f"[*] {message}\n")
-        self.log_textbox.see("end")
+    # --- SETUP DA INTERFACE INDUSTRIAL ---
+
+    def setup_acquisition_tab(self):
+        # Frame de Presets
+        f_presets = ctk.CTkFrame(self.tab_dl, fg_color="transparent")
+        f_presets.pack(padx=20, pady=10, fill="x")
+        
+        ctk.CTkLabel(f_presets, text="INDUSTRIAL PRESETS", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w")
+        self.preset_menu = ctk.CTkOptionMenu(f_presets, values=list(PRESET_MODELS.keys()), command=self.apply_preset, dynamic_resizing=False)
+        self.preset_menu.pack(pady=5, fill="x")
+
+        # Frame de Input Manual
+        f_manual = ctk.CTkFrame(self.tab_dl, fg_color="#252525", corner_radius=10)
+        f_manual.pack(padx=20, pady=10, fill="x")
+        
+        self.entry_id = ctk.CTkEntry(f_manual, placeholder_text="CIVITAI MODEL ID", height=40, border_width=1)
+        self.entry_id.pack(padx=10, pady=15, side="left", expand=True, fill="x")
+        
+        self.option_type = ctk.CTkOptionMenu(f_manual, values=["checkpoints", "loras", "vae", "controlnet"], width=120)
+        self.option_type.pack(padx=10, pady=15, side="left")
+
+        self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD TARGET", command=self.start_download, height=45, fg_color="#3b8ed0", font=ctk.CTkFont(weight="bold"))
+        self.btn_dl.pack(padx=20, pady=15, fill="x")
+
+        self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=250, font=("Consolas", 12), fg_color="#0d0d0d", border_width=1, border_color="#333")
+        self.log_acquisition.pack(padx=20, pady=10, fill="both", expand=True)
+
+    def setup_inventory_tab(self):
+        self.inv_list = ctk.CTkTextbox(self.tab_models, font=("Consolas", 12), fg_color="#0d0d0d")
+        self.inv_list.pack(padx=20, pady=20, fill="both", expand=True)
+        ctk.CTkButton(self.tab_models, text="REFRESH INVENTORY", command=self.refresh_models_list).pack(pady=10)
+
+    def setup_training_tab(self):
+        f_wizard = ctk.CTkFrame(self.tab_train, fg_color="#252525", corner_radius=10)
+        f_wizard.pack(padx=20, pady=20, fill="x")
+        
+        ctk.CTkLabel(f_wizard, text="DATASET WIZARD (AUTOMATED)", font=ctk.CTkFont(weight="bold")).pack(pady=10)
+        self.entry_trigger = ctk.CTkEntry(f_wizard, placeholder_text="TRIGGER WORD", height=35)
+        self.entry_trigger.pack(padx=20, pady=5, fill="x")
+        
+        ctk.CTkButton(f_wizard, text="GENERATE DATASET STRUCTURE", command=self.dataset_wizard, fg_color="#4B0082").pack(pady=15)
+        
+        self.log_train = ctk.CTkTextbox(self.tab_train, height=200, font=("Consolas", 11), fg_color="#0d0d0d")
+        self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
+
+    def setup_vault_tab(self):
+        # Bloco de Adição
+        f_add = ctk.CTkFrame(self.tab_settings, fg_color="transparent")
+        f_add.pack(padx=20, pady=20, fill="x")
+        
+        ctk.CTkLabel(f_add, text="REGISTER NEW API KEY", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w")
+        self.entry_api = ctk.CTkEntry(f_add, placeholder_text="Paste your Civitai API Key here...", show="*", height=40)
+        self.entry_api.pack(pady=10, fill="x")
+        
+        ctk.CTkButton(f_add, text="ADD TO VAULT", command=self.save_api_key, fg_color="#3b8ed0").pack(pady=5, fill="x")
+
+        # Bloco de Lista
+        ctk.CTkLabel(self.tab_settings, text="SAVED CREDENTIALS", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(padx=20, anchor="w", pady=(20,5))
+        
+        self.api_list_frame = ctk.CTkScrollableFrame(self.tab_settings, height=250, fg_color="#1a1a1a", border_width=1, border_color="#333")
+        self.api_list_frame.pack(padx=20, pady=5, fill="both", expand=True)
+
+    # --- LÓGICA FUNCIONAL (GOD MODE) ---
+
+    def apply_preset(self, choice):
+        p = PRESET_MODELS.get(choice)
+        if p and p["id"]:
+            self.entry_id.delete(0, "end")
+            self.entry_id.insert(0, p["id"])
+            self.option_type.set(p["type"])
+
+    def refresh_api_ui(self):
+        for widget in self.api_list_frame.winfo_children():
+            widget.destroy()
+        
+        for idx, key in enumerate(self.saved_apis):
+            f = ctk.CTkFrame(self.api_list_frame, fg_color="#252525", pady=5)
+            f.pack(fill="x", pady=2)
+            
+            masked_key = f"{key[:8]}...{key[-4:]}"
+            ctk.CTkLabel(f, text=f"🔑 Key {idx+1}: {masked_key}", font=("Consolas", 12)).pack(side="left", padx=15)
+            
+            ctk.CTkButton(f, text="REMOVE", width=60, height=24, fg_color="#444", hover_color="#8b0000", 
+                          command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=10)
+
+    def save_api_key(self):
+        new_key = self.entry_api.get().strip()
+        if new_key and new_key not in self.saved_apis:
+            self.saved_apis.append(new_key)
+            self.entry_api.delete(0, "end")
+            self.persist_config()
+            self.refresh_api_ui()
+            messagebox.showinfo("Vault", "Chave adicionada ao cofre com sucesso!")
+
+    def remove_api_key(self, key):
+        if key in self.saved_apis:
+            self.saved_apis.remove(key)
+            self.persist_config()
+            self.refresh_api_ui()
+
+    def persist_config(self):
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump({"api_keys": self.saved_apis}, f, indent=4)
 
     def load_config(self):
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, 'r') as f:
-                    config = json.load(f)
-                    self.api_key_entry.insert(0, config.get("civitai_api_key", ""))
+                    data = json.load(f)
+                    self.saved_apis = data.get("api_keys", [])
+                    # Legado
+                    old_key = data.get("civitai_api_key")
+                    if old_key and old_key not in self.saved_apis:
+                        self.saved_apis.append(old_key)
+                self.refresh_api_ui()
             except: pass
 
-    def save_config(self):
-        key = self.api_key_entry.get().strip()
-        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump({"civitai_api_key": key}, f, indent=4)
-        messagebox.showinfo("Sucesso", "Configurações salvas!")
-
-    def apply_preset(self, choice):
-        preset = PRESET_MODELS.get(choice)
-        if preset and preset["id"]:
-            self.model_id_entry.delete(0, "end")
-            self.model_id_entry.insert(0, preset["id"])
-            self.model_type_option.set(preset["type"])
+    def log(self, msg):
+        self.log_acquisition.insert("end", f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+        self.log_acquisition.see("end")
 
     def start_download(self):
-        m_id = self.model_id_entry.get().strip()
-        m_type = self.model_type_option.get()
-        if m_id:
-            thread = threading.Thread(target=self.run_downloader, args=(m_id, m_type))
-            thread.daemon = True
-            thread.start()
+        m_id = self.entry_id.get().strip()
+        m_type = self.option_type.get()
+        if not m_id: return
+        threading.Thread(target=self.run_downloader, args=(m_id, m_type), daemon=True).start()
 
     def run_downloader(self, m_id, m_type):
-        self.log(f"Iniciando download do Modelo ID: {m_id}...")
-        downloader_path = TOOLS_DIR / "downloader.py"
-        if os.name == "nt":
-            python_exe = VENV_PATH / "Scripts" / "python.exe"
-        else:
-            python_exe = VENV_PATH / "bin" / "python3"
+        self.log(f"Iniciando requisição para ID: {m_id}")
+        py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
+        dl = get_short_path(TOOLS_DIR / "downloader.py")
         
-        python_exe = python_exe if python_exe.exists() else Path(sys.executable)
-        cmd = [str(python_exe), str(downloader_path), m_id, m_type]
+        # Usar a última chave salva se existir
+        api_key = self.saved_apis[-1] if self.saved_apis else ""
         
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-        for line in process.stdout:
-            self.log(line.strip())
-        process.wait()
+        cmd = [str(py), str(dl), m_id, m_type]
+        env = os.environ.copy()
+        if api_key: env["CIVITAI_API_KEY"] = api_key
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+        for line in proc.stdout: self.log(line.strip())
+        proc.wait()
         self.after(500, self.refresh_models_list)
 
     def refresh_models_list(self):
-        self.models_listbox.delete("1.0", "end")
+        self.inv_list.delete("1.0", "end")
         found = False
         if MODELS_DIR.exists():
             for root, dirs, files in os.walk(MODELS_DIR):
-                for file in files:
-                    if file.endswith((".safetensors", ".ckpt")):
-                        rel_path = os.path.relpath(os.path.join(root, file), MODELS_DIR)
-                        self.models_listbox.insert("end", f"● {rel_path}\n")
+                for f in files:
+                    if f.endswith((".safetensors", ".ckpt")):
+                        self.inv_list.insert("end", f"● {f}\n")
                         found = True
-        if not found: self.models_listbox.insert("end", "Nenhum modelo detectado.")
+        if not found: self.inv_list.insert("end", "Inventory Empty.")
 
     def dataset_wizard(self):
-        trigger = self.wizard_trigger.get().strip()
+        trigger = self.entry_trigger.get().strip()
         if not trigger: return
-        source_dir = ctk.filedialog.askdirectory()
-        if not source_dir: return
-        base_train = BASE_DIR_PATH / "workspace" / "training_data" / trigger
-        img_dir = base_train / "img" / f"15_{trigger}"
-        img_dir.mkdir(parents=True, exist_ok=True)
+        src = ctk.filedialog.askdirectory(title="SELECT SOURCE IMAGES")
+        if not src: return
+        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
+        dst.mkdir(parents=True, exist_ok=True)
         import shutil
-        for i, file in enumerate(os.listdir(source_dir)):
-            if file.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                ext = os.path.splitext(file)[1]
-                shutil.copy2(os.path.join(source_dir, file), img_dir / f"{trigger}_{i:03d}{ext}")
-                with open(img_dir / f"{trigger}_{i:03d}.txt", "w") as f: f.write(trigger)
-        messagebox.showinfo("Sucesso", f"Dataset criado em {img_dir}")
+        for i, f in enumerate(os.listdir(src)):
+            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                ext = os.path.splitext(f)[1]
+                shutil.copy2(os.path.join(src, f), dst / f"{trigger}_{i:03d}{ext}")
+                with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
+        messagebox.showinfo("Wizard", f"Dataset industrial criado em: {dst}")
 
-    def start_training(self):
-        messagebox.showinfo("Treino", "Motor de treino ativo em log.")
+    def kill_port(self, port):
+        try:
+            if os.name == "nt":
+                subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True)
+            else:
+                subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
+        except: pass
 
     def start_studio(self):
         if self.process is None:
-            # Verificar se a Engine existe
+            self.kill_port(8188)
+            time.sleep(1)
             main_py = ENGINE_DIR / "main.py"
-            if not main_py.exists():
-                messagebox.showerror("Erro de Engine", "Núcleo da IA não encontrado na pasta 'engine/'.\nRode o Install-Linux.sh novamente.")
-                return
-
-            if os.name == "nt":
-                python_exe = VENV_PATH / "Scripts" / "python.exe"
-            else:
-                python_exe = VENV_PATH / "bin" / "python3"
-
+            if not main_py.exists(): return
+            
+            py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
             args = [
-                str(python_exe), str(main_py),
-                "--input-directory", str(BASE_DIR_PATH / "workspace" / "input"),
-                "--output-directory", str(BASE_DIR_PATH / "workspace" / "output"),
-                "--extra-model-paths-config", str(BASE_DIR_PATH / "config" / "extra_model_paths.yaml"),
-                "--listen", "127.0.0.1",
-                "--port", "8188",
-                "--lowvram",
-                "--fp8_e4m3fn-text-enc"
+                str(py), str(main_py),
+                "--input-directory", str(BASE_DIR_PATH / "workspace/input"),
+                "--output-directory", str(BASE_DIR_PATH / "workspace/output"),
+                "--listen", "127.0.0.1", "--port", "8188", "--lowvram"
             ]
 
             try:
-                self.log("Ignition... Ligando motor.")
                 if os.name == "nt":
                     flat_args = ' '.join([f'"{a}"' for a in args])
-                    self.process = subprocess.Popen(f'start "AI Studio Engine" cmd /k {flat_args}', shell=True, cwd=str(BASE_DIR_PATH))
+                    self.process = subprocess.Popen(f'start "AI CORE" cmd /k {flat_args}', shell=True, cwd=str(BASE_DIR_PATH))
                 else:
-                    # No Linux, tentamos abrir em um terminal visível (Kitty, Gnome-terminal ou Xterm)
-                    terminals = ["kitty", "gnome-terminal", "xterm", "konsole"]
-                    launched = False
-                    for term in terminals:
-                        if shutil.which(term):
-                            if term == "gnome-terminal":
-                                subprocess.Popen([term, "--", "bash", "-c", f"{' '.join(args)}; exec bash"], cwd=str(BASE_DIR_PATH))
-                            else:
-                                subprocess.Popen([term, "-e", "bash", "-c", f"{' '.join(args)}; exec bash"], cwd=str(BASE_DIR_PATH))
-                            launched = True
-                            break
-                    if not launched:
-                        self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(BASE_DIR_PATH))
-                
-                self.log("Engine disparada com sucesso!")
-            except Exception as e:
-                messagebox.showerror("Erro", f"Falha ao abrir Engine: {e}")
+                    # Stealth Mode Linux com log
+                    log_f = open(ENGINE_DIR / "comfyui_stealth.log", "w")
+                    self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(BASE_DIR_PATH))
+                self.log("Ignition successful. Core running.")
+            except Exception as e: messagebox.showerror("Critical", str(e))
 
     def stop_studio(self):
+        self.kill_port(8188)
         if self.process:
-            if os.name == "nt":
-                subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
-            else:
-                self.process.terminate()
+            try:
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
+                else:
+                    self.process.terminate()
+            except: pass
             self.process = None
-            self.status_indicator.configure(text="● ENGINE OFFLINE", text_color="red")
+        self.status_indicator.configure(text="● SYSTEM OFFLINE", text_color="#ff4444")
 
     def check_status_loop(self):
         def check():
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
-            try:
-                # Verificar se a porta 8188 está aberta
-                if sock.connect_ex(('127.0.0.1', 8188)) == 0:
-                    self.status_indicator.configure(text="● ENGINE ONLINE", text_color="green")
-                else:
-                    self.status_indicator.configure(text="● ENGINE OFFLINE", text_color="red")
-            except: pass
-            finally: sock.close()
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1)
+            online = s.connect_ex(('127.0.0.1', 8188)) == 0
+            self.status_indicator.configure(text="● SYSTEM OPERATIONAL" if online else "● SYSTEM OFFLINE", 
+                                            text_color="#44ff44" if online else "#ff4444")
+            s.close()
             self.after(5000, check)
         self.after(2000, check)
 
