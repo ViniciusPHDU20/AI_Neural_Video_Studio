@@ -43,7 +43,7 @@ except ImportError:
     psutil = None
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.6.5 (Memory Shield)"
+VERSION = "1.6.6 (Engine Syntax Fix)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -53,15 +53,16 @@ ENGINE_DIR = BASE_DIR_PATH / "engine"
 MODELS_DIR = BASE_DIR_PATH / "models"
 CONFIG_FILE = BASE_DIR_PATH / "config" / "user_config.json"
 
+# --- PERFIS DE PERFORMANCE (CORRIGIDOS PARA COMFYUI MODERNO) ---
 GPU_PROFILES = {
     "NVIDIA": {
         "POTATO (2-4GB VRAM)": "--lowvram --fp8_e4m3fn-text-enc",
-        "INDUSTRIAL (8GB - 3060 Ti)": "--medvram --xformers --fp8_e4m3fn-text-enc",
-        "GOD MODE (16-24GB VRAM)": "--highvram --xformers --fp16-vae"
+        "INDUSTRIAL (8GB - 3060 Ti)": "--normalvram --use-split-cross-attention --fp8_e4m3fn-text-enc",
+        "GOD MODE (16-24GB VRAM)": "--gpu-only --fp16-vae"
     },
     "AMD": {
         "RX BUDGET (4-6GB VRAM)": "--directml --lowvram --fp8_e4m3fn-text-enc",
-        "RX POWER (12GB+ - 6750 XT)": "--directml --medvram --fp8_e4m3fn-text-enc"
+        "RX POWER (12GB+ - 6750 XT)": "--directml --normalvram --fp8_e4m3fn-text-enc"
     },
     "CPU": {"SLOW MODE": "--cpu"}
 }
@@ -166,8 +167,6 @@ class App(ctk.CTk):
         ram_flags = RAM_PROFILES.get(self.active_ram_profile, "")
         self.lbl_flags.configure(text=f"ENGINE FLAGS: {gpu_flags} {ram_flags}")
 
-    # --- RESTANTE DAS FUNÇÕES (COM TRY/EXCEPT BLINDADO) ---
-
     def start_telemetry_loop(self):
         def update():
             while True:
@@ -218,7 +217,7 @@ class App(ctk.CTk):
             self.kill_port(8188); time.sleep(1)
             gpu_f = GPU_PROFILES[self.detected_vendor].get(self.active_profile, "").split()
             ram_f = RAM_PROFILES.get(self.active_ram_profile, "").split()
-            flags = gpu_f + ram_f
+            flags = list(set(gpu_f + ram_f)) # Remover duplicatas de flags
             
             py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
             main = str(ENGINE_DIR / "main.py")
@@ -233,7 +232,7 @@ class App(ctk.CTk):
                 else:
                     log_f = open(ENGINE_DIR / "comfyui_stealth.log", "w")
                     self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(BASE_DIR_PATH))
-                self.log_acquisition.insert("end", f"[V] Ignition: {self.active_profile} | {self.active_ram_profile}\n")
+                self.log_acquisition.insert("end", f"[V] Ignition: {self.active_profile}\n")
             except Exception as e: messagebox.showerror("Error", str(e))
 
     def stop_studio(self):
@@ -263,7 +262,6 @@ class App(ctk.CTk):
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(CONFIG_FILE, 'w') as f: json.dump(d, f, indent=4)
 
-    # --- UI WRAPPERS ---
     def setup_acquisition_tab(self):
         self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=self.apply_preset, height=45); self.preset_menu.pack(padx=20, pady=20, fill="x")
         self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI ID", height=45); self.entry_id.pack(padx=20, pady=10, fill="x")
@@ -338,20 +336,6 @@ class App(ctk.CTk):
             self.status_indicator.configure(text="● SYSTEM OPERATIONAL" if online else "● SYSTEM OFFLINE", text_color="#44ff44" if online else "#ff4444")
             s.close(); self.after(5000, check)
         self.after(2000, check)
-
-    def dataset_wizard(self):
-        trigger = self.entry_trigger.get().strip()
-        if not trigger: return
-        src = ctk.filedialog.askdirectory()
-        if not src: return
-        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
-        dst.mkdir(parents=True, exist_ok=True)
-        import shutil
-        for i, f in enumerate(os.listdir(src)):
-            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                ext = os.path.splitext(f)[1]; shutil.copy2(os.path.join(src, f), dst / f"{trigger}_{i:03d}{ext}")
-                with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
-        messagebox.showinfo("Wizard", "Dataset Created.")
 
 if __name__ == "__main__":
     app = App(); app.mainloop()
