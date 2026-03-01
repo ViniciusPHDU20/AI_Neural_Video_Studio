@@ -16,6 +16,7 @@ try:
 except ImportError:
     psutil = None
 from tkinter import messagebox
+from PIL import Image
 
 # --- AUTO-CORREÇÃO DE AMBIENTE (GOD MODE) ---
 BASE_DIR = Path(__file__).parent.absolute()
@@ -41,7 +42,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.7.2 (Granular Training)"
+VERSION = "1.7.3 (Industrial Org)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -155,37 +156,29 @@ class App(ctk.CTk):
     def setup_inventory_tab(self):
         self.inv_list = ctk.CTkTextbox(self.tab_inv, font=("Consolas", 12), fg_color="#050505")
         self.inv_list.pack(padx=20, pady=20, fill="both", expand=True)
+        self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total Size: 0.00 GB", font=("Consolas", 12, "bold"))
+        self.lbl_inv_total.pack(pady=5)
         ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
 
     def setup_training_tab(self):
         f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=10, fill="x")
-        
-        # Grid para inputs de caminho
         self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=35); self.train_base_model.pack(padx=20, pady=5, fill="x")
         self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=35); self.train_lora_name.pack(padx=20, pady=5, fill="x")
         self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=35); self.entry_trigger.pack(padx=20, pady=5, fill="x")
         
-        # Bloco de Parâmetros Granulares
-        f_params = ctk.CTkFrame(self.tab_train, fg_color="transparent")
-        f_params.pack(padx=20, pady=10, fill="x")
-        f_params.grid_columnconfigure((0,1,2,3), weight=1)
+        f_params = ctk.CTkFrame(self.tab_train, fg_color="transparent"); f_params.pack(padx=20, pady=10, fill="x"); f_params.grid_columnconfigure((0,1,2,3), weight=1)
+        self.train_res = ctk.CTkEntry(f_params, placeholder_text="Res (512/1024)", height=35); self.train_res.grid(row=0, column=0, padx=5, sticky="ew"); self.train_res.insert(0, "512")
+        self.train_batch = ctk.CTkEntry(f_params, placeholder_text="Batch Size", height=35); self.train_batch.grid(row=0, column=1, padx=5, sticky="ew"); self.train_batch.insert(0, "1")
+        self.train_steps = ctk.CTkEntry(f_params, placeholder_text="Max Steps", height=35); self.train_steps.grid(row=0, column=2, padx=5, sticky="ew"); self.train_steps.insert(0, "1000")
+        self.train_lr = ctk.CTkEntry(f_params, placeholder_text="Learning Rate", height=35); self.train_lr.grid(row=0, column=3, padx=5, sticky="ew"); self.train_lr.insert(0, "1e-4")
 
-        self.train_res = ctk.CTkEntry(f_params, placeholder_text="Res (512/1024)", height=35); self.train_res.grid(row=0, column=0, padx=5, sticky="ew")
-        self.train_res.insert(0, "512")
+        f_wizard = ctk.CTkFrame(self.tab_train, fg_color="transparent")
+        f_wizard.pack(pady=5)
+        self.chk_resize = ctk.CTkCheckBox(f_wizard, text="Auto-Resize Images (Stabilizer)", font=("Consolas", 11)); self.chk_resize.pack(side="left", padx=10); self.chk_resize.select()
+        ctk.CTkButton(f_wizard, text="DATASET WIZARD", command=lambda: self.dataset_wizard(), fg_color="#4B0082", height=40).pack(side="left", padx=10)
         
-        self.train_batch = ctk.CTkEntry(f_params, placeholder_text="Batch Size", height=35); self.train_batch.grid(row=0, column=1, padx=5, sticky="ew")
-        self.train_batch.insert(0, "1")
-        
-        self.train_steps = ctk.CTkEntry(f_params, placeholder_text="Max Steps", height=35); self.train_steps.grid(row=0, column=2, padx=5, sticky="ew")
-        self.train_steps.insert(0, "1000")
-        
-        self.train_lr = ctk.CTkEntry(f_params, placeholder_text="Learning Rate", height=35); self.train_lr.grid(row=0, column=3, padx=5, sticky="ew")
-        self.train_lr.insert(0, "1e-4")
-
-        ctk.CTkButton(self.tab_train, text="🚀 DATASET WIZARD", command=lambda: self.dataset_wizard(), fg_color="#4B0082", height=40).pack(pady=5)
         self.btn_train = ctk.CTkButton(self.tab_train, text="START INDUSTRIAL TRAINING", command=lambda: self.start_training(), fg_color="#FF8C00", height=45, font=ctk.CTkFont(weight="bold"))
         self.btn_train.pack(padx=20, pady=10, fill="x")
-        
         self.log_train = ctk.CTkTextbox(self.tab_train, height=250, font=("Consolas", 11), fg_color="#050505"); self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
 
     def setup_optimizer_tab(self):
@@ -241,7 +234,7 @@ class App(ctk.CTk):
         for w in self.api_list_frame.winfo_children(): w.destroy()
         for key in self.saved_apis:
             f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
-            ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
+            ctk.CTkLabel(f, text=f"ID: {key[:6]}***{key[-4:]}", font=("Consolas", 12)).pack(side="left", padx=10)
             ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
 
     def remove_api_key(self, key):
@@ -269,8 +262,7 @@ class App(ctk.CTk):
             if os.name != "nt":
                 subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True, timeout=2)
                 subprocess.run(f"lsof -ti:{port} | xargs kill -9", shell=True, capture_output=True, timeout=2)
-            else:
-                subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True, timeout=2)
+            else: subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True, timeout=2)
         except: pass
 
     def start_studio(self):
@@ -347,16 +339,27 @@ class App(ctk.CTk):
 
     def refresh_models_list(self):
         self.inv_list.delete("1.0", "end")
-        u = []
+        categories = {"checkpoints": [], "loras": [], "vae": [], "controlnet": [], "other": []}
+        total_size = 0
         if MODELS_DIR.exists():
             for root, dirs, files in os.walk(MODELS_DIR):
                 for f in files:
                     if f.endswith((".safetensors", ".ckpt")):
                         path = Path(root) / f
-                        size = os.path.getsize(path) / (1024*1024*1024)
-                        u.append(f"● {f} ({size:.2f} GB)")
-            for m in sorted(u): self.inv_list.insert("end", f"{m}\n")
-        if not u: self.inv_list.insert("end", "Inventory Empty.")
+                        f_size = os.path.getsize(path) / (1024**3)
+                        total_size += f_size
+                        item = f"● {f} ({f_size:.2f} GB)"
+                        
+                        found = False
+                        for cat in categories.keys():
+                            if cat in str(path).lower(): categories[cat].append(item); found = True; break
+                        if not found: categories["other"].append(item)
+            
+            for cat, items in categories.items():
+                if items:
+                    self.inv_list.insert("end", f"\n--- {cat.upper()} ---\n")
+                    for m in sorted(items): self.inv_list.insert("end", f"{m}\n")
+        self.lbl_inv_total.configure(text=f"Total Inventory Size: {total_size:.2f} GB")
 
     def dataset_wizard(self):
         trigger = self.entry_trigger.get().strip()
@@ -365,40 +368,39 @@ class App(ctk.CTk):
         if not src: return
         dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
         dst.mkdir(parents=True, exist_ok=True)
-        import shutil
+        res = int(self.train_res.get().strip()) if self.train_res.get().strip().isdigit() else 512
+        
         for i, f in enumerate(os.listdir(src)):
             if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                ext = os.path.splitext(f)[1]; shutil.copy2(os.path.join(src, f), dst / f"{trigger}_{i:03d}{ext}")
+                ext = os.path.splitext(f)[1]
+                path_src = os.path.join(src, f)
+                path_dst = dst / f"{trigger}_{i:03d}{ext}"
+                
+                if self.chk_resize.get():
+                    with Image.open(path_src) as img:
+                        img = img.convert("RGB")
+                        img.thumbnail((res, res), Image.Resampling.LANCZOS)
+                        new_img = Image.new("RGB", (res, res), (0, 0, 0))
+                        new_img.paste(img, ((res - img.size[0]) // 2, (res - img.size[1]) // 2))
+                        new_img.save(path_dst)
+                else:
+                    shutil.copy2(path_src, path_dst)
+                
                 with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
-        messagebox.showinfo("Wizard", "Dataset Created.")
+        messagebox.showinfo("Wizard", f"Dataset Created & Optimized ({res}x{res})")
 
     def start_training(self):
         m = self.train_base_model.get().strip(); n = self.train_lora_name.get().strip(); t = self.entry_trigger.get().strip()
-        res = self.train_res.get().strip()
-        batch = self.train_batch.get().strip()
-        steps = self.train_steps.get().strip()
-        lr = self.train_lr.get().strip()
-
-        if not all([m, n, t, res, batch, steps, lr]): messagebox.showwarning("Erro", "Preencha todos os parâmetros de treino!"); return
+        res = self.train_res.get().strip(); batch = self.train_batch.get().strip()
+        steps = self.train_steps.get().strip(); lr = self.train_lr.get().strip()
+        if not all([m, n, t, res, batch, steps, lr]): messagebox.showwarning("Erro", "Preencha tudo!"); return
         threading.Thread(target=self.run_train, args=(m, n, t, res, batch, steps, lr), daemon=True).start()
 
     def run_train(self, m, n, t, res, batch, steps, lr):
         self.log_train.insert("end", f"[{time.strftime('%H:%M:%S')}] STARTING INDUSTRIAL TRAINING...\n")
         py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
         script = get_short_path(TOOLS_DIR / "sd-scripts" / "train_network.py")
-        cmd = [
-            str(py), str(script), 
-            "--pretrained_model_name_or_path", m, 
-            "--train_data_dir", str(BASE_DIR_PATH / "workspace/training_data" / t / "img"), 
-            "--output_dir", str(MODELS_DIR / "loras"), 
-            "--output_name", n, 
-            "--resolution", f"{res},{res}", 
-            "--train_batch_size", batch, 
-            "--max_train_steps", steps, 
-            "--learning_rate", lr, 
-            "--network_module", "networks.lora", 
-            "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"
-        ]
+        cmd = [str(py), str(script), "--pretrained_model_name_or_path", m, "--train_data_dir", str(BASE_DIR_PATH / "workspace/training_data" / t / "img"), "--output_dir", str(MODELS_DIR / "loras"), "--output_name", n, "--resolution", f"{res},{res}", "--train_batch_size", batch, "--max_train_steps", steps, "--learning_rate", lr, "--network_module", "networks.lora", "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for line in proc.stdout: self.log_train.insert("end", line); self.log_train.see("end")
         proc.wait()
