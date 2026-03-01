@@ -43,7 +43,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "2.0.0 (Neural Singularity)"
+VERSION = "2.1.0 (Hardware Synthesis)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -54,17 +54,23 @@ MODELS_DIR = BASE_DIR_PATH / "models"
 CONFIG_FILE = BASE_DIR_PATH / "config" / "user_config.json"
 WORKFLOWS_DIR = BASE_DIR_PATH / "workspace" / "workflows"
 
-GPU_PROFILES = {
+# --- MAPEAMENTO INDUSTRIAL DE HARDWARE (GOLDEN FLAGS) ---
+GPU_DATABASE = {
     "NVIDIA": {
-        "POTATO (2-4GB VRAM)": "--lowvram --fp8_e4m3fn-text-enc",
-        "INDUSTRIAL (8GB - 3060 Ti)": "--normalvram --use-split-cross-attention --fp8_e4m3fn-text-enc",
-        "GOD MODE (16-24GB VRAM)": "--gpu-only --fp16-vae"
+        "RTX 3060 Ti / 4060 (8GB)": "--normalvram --use-split-cross-attention --fp8_e4m3fn-text-enc",
+        "RTX 3060 / 4060 Ti (12GB-16GB)": "--gpu-only --use-split-cross-attention --fp16-vae",
+        "RTX 3090 / 4090 (24GB)": "--gpu-only --highvram --use-split-cross-attention --fp16-vae",
+        "RTX 2060 / 3050 (4GB-6GB)": "--lowvram --fp8_e4m3fn-text-enc --disable-xformers",
+        "GTX Series (Sem Tensor Cores)": "--lowvram --fp16-vae --disable-xformers"
     },
     "AMD": {
-        "RX BUDGET (4-6GB VRAM)": "--directml --lowvram --fp8_e4m3fn-text-enc",
-        "RX POWER (12GB+ - 6750 XT)": "--directml --normalvram --fp8_e4m3fn-text-enc"
+        "RX 6700 XT / 6750 XT (12GB)": "--directml --normalvram --fp8_e4m3fn-text-enc",
+        "RX 7900 XT / XTX (20GB+)": "--directml --gpu-only --highvram --fp16-vae",
+        "RX 580 / 6600 (4GB-8GB)": "--directml --lowvram --fp8_e4m3fn-text-enc"
     },
-    "CPU": {"SLOW MODE": "--cpu"}
+    "CPU / INTEGRATED": {
+        "Integrated / Basic": "--cpu"
+    }
 }
 
 RAM_PROFILES = {
@@ -106,7 +112,7 @@ class App(ctk.CTk):
         self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0, fg_color="#0a0a0a")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
-        ctk.CTkLabel(self.sidebar, text="NEURAL CORE 2.0", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
+        ctk.CTkLabel(self.sidebar, text="NEURAL CORE 2.1", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
         
         self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10)
         self.status_box.pack(padx=15, pady=5, fill="x")
@@ -127,19 +133,16 @@ class App(ctk.CTk):
 
         self.btn_start = ctk.CTkButton(self.sidebar, text="ENGINE IGNITION", command=lambda: self.start_studio(), fg_color="#2d5a27", hover_color="#1e3d1a", height=50, font=ctk.CTkFont(size=14, weight="bold"))
         self.btn_start.pack(padx=20, pady=10, fill="x")
-        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE", command=lambda: self.stop_studio(), fg_color="#8b0000", hover_color="#5a0000", height=50, font=ctk.CTkFont(size=14, weight="bold"))
+        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE CORE", command=lambda: self.stop_studio(), fg_color="#8b0000", hover_color="#5a0000", height=50, font=ctk.CTkFont(size=14, weight="bold"))
         self.btn_stop.pack(padx=20, pady=10, fill="x")
 
         # --- TABS ---
         self.tabs = ctk.CTkTabview(self, segmented_button_fg_color="#0a0a0a", segmented_button_selected_color="#3b8ed0")
         self.tabs.grid(row=0, column=1, padx=20, pady=10, sticky="nsew")
         
-        self.tab_dl = self.tabs.add("📦 ACQUISITION")
-        self.tab_inv = self.tabs.add("📂 INVENTORY")
-        self.tab_canvas = self.tabs.add("🧠 NEURAL CANVAS")
-        self.tab_train = self.tabs.add("🚀 TRAINING")
-        self.tab_opt = self.tabs.add("⚙️ OPTIMIZER")
-        self.tab_vault = self.tabs.add("🔒 VAULT")
+        self.tab_dl = self.tabs.add("📦 ACQUISITION"); self.tab_inv = self.tabs.add("📂 INVENTORY")
+        self.tab_canvas = self.tabs.add("🧠 NEURAL CANVAS"); self.tab_train = self.tabs.add("🚀 TRAINING")
+        self.tab_opt = self.tabs.add("⚙️ OPTIMIZER"); self.tab_vault = self.tabs.add("🔒 VAULT")
 
         self.setup_acquisition_tab(); self.setup_inventory_tab(); self.setup_canvas_tab()
         self.setup_training_tab(); self.setup_optimizer_tab(); self.setup_vault_tab()
@@ -147,70 +150,43 @@ class App(ctk.CTk):
         self.detect_hardware(); self.load_config()
         self.check_status_loop(); self.start_telemetry_loop()
 
-    def setup_canvas_tab(self):
-        self.canvas_list = ctk.CTkTextbox(self.tab_canvas, font=("Consolas", 12), fg_color="#050505")
-        self.canvas_list.pack(padx=20, pady=20, fill="both", expand=True)
-        f_controls = ctk.CTkFrame(self.tab_canvas, fg_color="transparent")
-        f_controls.pack(pady=10)
-        ctk.CTkButton(f_controls, text="REFRESH WORKFLOWS", command=lambda: self.refresh_canvas(), height=40).pack(side="left", padx=10)
-        ctk.CTkButton(f_controls, text="OPEN FOLDER", command=lambda: os.system(f"xdg-open '{WORKFLOWS_DIR}'"), fg_color="#444", height=40).pack(side="left", padx=10)
-        self.refresh_canvas()
-
-    def refresh_canvas(self):
-        self.canvas_list.delete("1.0", "end")
-        WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
-        files = [f for f in os.listdir(WORKFLOWS_DIR) if f.endswith(".json")]
-        if not files: self.canvas_list.insert("end", "Nenhum fluxo (.json) encontrado em workspace/workflows/")
-        for f in sorted(files): self.canvas_list.insert("end", f"⚡ {f}\n")
-
-    # --- REST OF THE METHODS (UPDATED TO V2.0.0) ---
-    def get_lora_trigger(self, file_path):
-        try:
-            with open(file_path, "rb") as f:
-                header_size = struct.unpack("<Q", f.read(8))[0]
-                header_json = f.read(header_size).decode("utf-8")
-                header = json.loads(header_json)
-                metadata = header.get("__metadata__", {})
-                tags = metadata.get("ss_tag_frequency", "")
-                if tags:
-                    tag_dict = json.loads(tags) if isinstance(tags, str) and tags.startswith("{") else {}
-                    if tag_dict:
-                        main_tags = list(tag_dict.keys())[0] if isinstance(tag_dict, dict) else ""
-                        return f"[Tags: {str(main_tags)[:30]}...]"
-                return ""
-        except: return ""
-
     def setup_optimizer_tab(self):
         f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
         f.pack(padx=40, pady=20, fill="both", expand=True)
-        ctk.CTkLabel(f, text="INTELLIGENT HARDWARE OPTIMIZER", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=15)
+        ctk.CTkLabel(f, text="HARDWARE SYNTHESIS MANAGER", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=15)
         self.lbl_detected = ctk.CTkLabel(f, text="DETECTED GPU: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=5)
         self.lbl_vram_total = ctk.CTkLabel(f, text="TOTAL VRAM: ---", text_color="white", font=("Consolas", 12)); self.lbl_vram_total.pack(pady=5)
-        ctk.CTkLabel(f, text="Performance Profile:", text_color="gray").pack(pady=(15, 0))
-        self.profile_menu = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=400, height=45); self.profile_menu.pack(pady=5)
-        ctk.CTkLabel(f, text="Expert Flags (Manual Injection):", text_color="#FF8C00").pack(pady=(15, 0))
-        self.entry_expert = ctk.CTkEntry(f, placeholder_text="--cuda-malloc --disable-smart-memory", height=45, width=450); self.entry_expert.pack(pady=5)
+        
+        ctk.CTkLabel(f, text="SELECIONE SEU MODELO DE GPU (Manual Override):", text_color="#aaa").pack(pady=(15, 0))
+        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=450, height=45); self.gpu_picker.pack(pady=5)
+        
+        ctk.CTkLabel(f, text="Gerenciamento de RAM do Sistema:", text_color="gray").pack(pady=(15, 0))
+        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=400, height=40); self.ram_menu.pack(pady=5)
+
+        ctk.CTkLabel(f, text="Expert Engine Flags (Manual Injection):", text_color="#FF8C00").pack(pady=(15, 0))
+        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Ex: --cuda-malloc", height=45, width=450); self.entry_expert.pack(pady=5)
         self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
-        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=550); self.lbl_flags.pack(pady=25)
+        
+        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=600); self.lbl_flags.pack(pady=25)
 
-    def update_expert_flags(self):
-        self.expert_flags = self.entry_expert.get().strip(); self.update_flags_preview(); self.persist_config()
+    def refresh_optimizer_ui(self):
+        self.lbl_detected.configure(text=f"HARDWARE: {self.detected_vendor}")
+        # Carregar lista dinâmica baseada no Vendor
+        models = list(GPU_DATABASE[self.detected_vendor].keys())
+        self.gpu_picker.configure(values=models)
+        if models:
+            d = self.active_profile if self.active_profile in models else models[0]
+            self.gpu_picker.set(d); self.set_profile(d)
 
-    def update_flags_preview(self):
-        gpu_f = GPU_PROFILES[self.detected_vendor].get(self.active_profile, "")
+    def set_profile(self, choice):
+        self.active_profile = choice
+        gpu_f = GPU_DATABASE[self.detected_vendor].get(choice, "")
         ram_f = RAM_PROFILES.get(self.active_ram_profile, "")
-        total = f"{gpu_f} {ram_f} {self.expert_flags}".strip()
-        self.lbl_flags.configure(text=f"ENGINE FLAGS: {total}")
+        self.lbl_flags.configure(text=f"ENGINE FLAGS: {gpu_f} {ram_f} {self.expert_flags}")
+        self.persist_config()
 
-    def system_purge(self):
-        if not messagebox.askyesno("Purge", "Deseja realizar a limpeza profunda?"): return
-        try:
-            log = ENGINE_DIR / "comfyui_stealth.log"
-            if log.exists(): log.write_text("")
-            temp = ENGINE_DIR / "temp"
-            if temp.exists(): shutil.rmtree(temp); temp.mkdir()
-            messagebox.showinfo("Success", "Sistema purificado!")
-        except Exception as e: messagebox.showerror("Error", str(e))
+    def set_ram_profile(self, choice):
+        self.active_ram_profile = choice; self.set_profile(self.active_profile)
 
     def detect_hardware(self):
         try:
@@ -233,11 +209,32 @@ class App(ctk.CTk):
 
     def auto_suggest_profile(self):
         if self.detected_vram > 0 and not self.active_profile:
-            if self.detected_vram <= 4096: p = "POTATO (2-4GB VRAM)"
-            elif self.detected_vram <= 10240: p = "INDUSTRIAL (8GB - 3060 Ti)"
-            else: p = "GOD MODE (16-24GB VRAM)"
-            if self.detected_vendor == "AMD": p = "RX BUDGET (4-6GB VRAM)" if self.detected_vram <= 6144 else "RX POWER (12GB+ - 6750 XT)"
-            self.profile_menu.set(p); self.set_profile(p)
+            # Seleção automática por VRAM no Database novo
+            models = list(GPU_DATABASE[self.detected_vendor].keys())
+            if "NVIDIA" in self.detected_vendor:
+                if self.detected_vram <= 6144: p = models[3] # 2060/3050
+                elif self.detected_vram <= 8192: p = models[0] # 3060 Ti
+                elif self.detected_vram <= 16384: p = models[1] # 3060/4060 Ti
+                else: p = models[2] # 3090/4090
+            else: p = models[0]
+            self.gpu_picker.set(p); self.set_profile(p)
+
+    # --- BASE METHODS (CANVAS / TELEMETRY) ---
+    def setup_canvas_tab(self):
+        self.canvas_list = ctk.CTkTextbox(self.tab_canvas, font=("Consolas", 12), fg_color="#050505")
+        self.canvas_list.pack(padx=20, pady=20, fill="both", expand=True)
+        f_controls = ctk.CTkFrame(self.tab_canvas, fg_color="transparent")
+        f_controls.pack(pady=10)
+        ctk.CTkButton(f_controls, text="REFRESH WORKFLOWS", command=lambda: self.refresh_canvas(), height=40).pack(side="left", padx=10)
+        ctk.CTkButton(f_controls, text="OPEN FOLDER", command=lambda: os.system(f"xdg-open '{WORKFLOWS_DIR}'"), fg_color="#444", height=40).pack(side="left", padx=10)
+        self.refresh_canvas()
+
+    def refresh_canvas(self):
+        self.canvas_list.delete("1.0", "end")
+        WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+        files = [f for f in os.listdir(WORKFLOWS_DIR) if f.endswith(".json")]
+        if not files: self.canvas_list.insert("end", "Nenhum fluxo (.json) encontrado em workspace/workflows/")
+        for f in sorted(files): self.canvas_list.insert("end", f"⚡ {f}\n")
 
     def start_telemetry_loop(self):
         def update():
@@ -257,7 +254,7 @@ class App(ctk.CTk):
     def start_studio(self):
         if self.process is None:
             self.kill_port(8188); time.sleep(2)
-            gpu_f = GPU_PROFILES[self.detected_vendor].get(self.active_profile, "").split()
+            gpu_f = GPU_DATABASE[self.detected_vendor].get(self.active_profile, "").split()
             ram_f = RAM_PROFILES.get(self.active_ram_profile, "").split()
             exp_f = self.expert_flags.split()
             flags = list(set(gpu_f + ram_f + exp_f))
@@ -359,20 +356,8 @@ class App(ctk.CTk):
             s.close(); self.after(5000, check)
         self.after(2000, check)
 
-    def set_profile(self, choice):
-        self.active_profile = choice; self.update_flags_preview(); self.persist_config()
-
-    def set_ram_profile(self, choice):
-        self.active_ram_profile = choice; self.update_flags_preview(); self.persist_config()
-
-    def refresh_optimizer_ui(self):
-        self.lbl_detected.configure(text=f"HARDWARE: {self.detected_vendor}")
-        self.lbl_vram_total.configure(text=f"TOTAL VRAM: {self.detected_vram} MB")
-        p = list(GPU_PROFILES[self.detected_vendor].keys())
-        self.profile_menu.configure(values=p)
-        if p:
-            d = self.active_profile if self.active_profile in p else p[0]
-            self.profile_menu.set(d); self.set_profile(d)
+    def update_expert_flags(self):
+        self.expert_flags = self.entry_expert.get().strip(); self.set_profile(self.active_profile)
 
     def apply_preset(self, choice):
         p = PRESET_MODELS.get(choice)
