@@ -38,7 +38,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.6.3 (Stability Recovery)"
+VERSION = "1.6.4 (Reliability Overhaul)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -89,7 +89,7 @@ class App(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # --- SIDEBAR (TELEMETRY) ---
+        # --- SIDEBAR ---
         self.sidebar = ctk.CTkFrame(self, width=240, corner_radius=0, fg_color="#0d0d0d")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
@@ -100,15 +100,16 @@ class App(ctk.CTk):
         self.status_indicator = ctk.CTkLabel(self.status_box, text="● SYSTEM OFFLINE", text_color="#ff4444", font=ctk.CTkFont(size=12, weight="bold"))
         self.status_indicator.pack(pady=10)
 
+        # Telemetry
         self.telemetry_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10)
         self.telemetry_box.pack(padx=15, pady=15, fill="x")
         ctk.CTkLabel(self.telemetry_box, text="SYSTEM TELEMETRY", font=ctk.CTkFont(size=10, weight="bold"), text_color="gray").pack(pady=(5,0))
         self.lbl_cpu = ctk.CTkLabel(self.telemetry_box, text="CPU: 0%", font=("Consolas", 11)); self.lbl_cpu.pack(pady=2)
         self.lbl_vram = ctk.CTkLabel(self.telemetry_box, text="VRAM: 0MB", font=("Consolas", 11)); self.lbl_vram.pack(pady=2)
 
-        self.btn_start = ctk.CTkButton(self.sidebar, text="IGNITION", command=self.start_studio, fg_color="#2d5a27", height=45, font=ctk.CTkFont(weight="bold"))
+        self.btn_start = ctk.CTkButton(self.sidebar, text="IGNITION", command=self.start_studio, fg_color="#2d5a27", hover_color="#1e3d1a", height=45, font=ctk.CTkFont(weight="bold"))
         self.btn_start.pack(padx=20, pady=10, fill="x")
-        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE", command=self.stop_studio, fg_color="#8b0000", height=45, font=ctk.CTkFont(weight="bold"))
+        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE", command=self.stop_studio, fg_color="#8b0000", hover_color="#5a0000", height=45, font=ctk.CTkFont(weight="bold"))
         self.btn_stop.pack(padx=20, pady=10, fill="x")
 
         # --- TABS ---
@@ -136,9 +137,8 @@ class App(ctk.CTk):
         self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505"); self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
 
     def setup_training_tab(self):
-        f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10)
-        f.pack(padx=20, pady=20, fill="x")
-        self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH (Safetensors)", height=40); self.train_base_model.pack(padx=20, pady=10, fill="x")
+        f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=20, fill="x")
+        self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=40); self.train_base_model.pack(padx=20, pady=10, fill="x")
         self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=40); self.train_lora_name.pack(padx=20, pady=10, fill="x")
         self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=40); self.entry_trigger.pack(padx=20, pady=10, fill="x")
         ctk.CTkButton(f, text="🚀 DATASET WIZARD", command=self.dataset_wizard, fg_color="#4B0082", height=40).pack(pady=10)
@@ -185,13 +185,14 @@ class App(ctk.CTk):
         threading.Thread(target=update, daemon=True).start()
 
     def validate_api_key(self, key):
-        return len(key) >= 20 and " " not in key
+        # Relaxed check: Alphanumeric and at least 15 chars
+        return len(key) >= 15 and " " not in key
 
     def save_api_key(self):
         key = self.entry_api.get().strip()
         if self.validate_api_key(key):
             if key not in self.saved_apis: self.saved_apis.append(key); self.persist_config(); self.refresh_api_ui(); messagebox.showinfo("Vault", "Chave Salva!")
-        else: messagebox.showerror("Vault", "Formato de chave inválido.")
+        else: messagebox.showerror("Vault", "Formato de chave inválido (mínimo 15 caracteres, sem espaços).")
         self.entry_api.delete(0, "end")
 
     def refresh_api_ui(self):
@@ -213,20 +214,41 @@ class App(ctk.CTk):
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, 'r') as f:
-                    d = json.load(f); self.saved_apis = d.get("api_keys", []); self.active_profile = d.get("hw_profile", "")
+                    d = json.load(f)
+                    # Support both list and single key legacy
+                    self.saved_apis = d.get("api_keys", [])
+                    if not self.saved_apis and d.get("civitai_api_key"):
+                        self.saved_apis = [d.get("civitai_api_key")]
+                    self.active_profile = d.get("hw_profile", "")
                 self.refresh_api_ui(); self.refresh_optimizer_ui()
+            except: pass
+
+    def kill_port(self, port):
+        # Nuclear Cleaning on Linux
+        if os.name != "nt":
+            try:
+                subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
+                subprocess.run(f"lsof -ti:{port} | xargs kill -9", shell=True, capture_output=True)
+                subprocess.run(["pkill", "-f", "main.py"], capture_output=True)
+            except: pass
+        else:
+            try: subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True)
             except: pass
 
     def start_studio(self):
         if self.process is None:
-            self.kill_port(8188); time.sleep(1)
+            self.log_acquisition.insert("end", "[*] Reiniciando Porta 8188...\n")
+            self.kill_port(8188); time.sleep(2)
+            
             flags = GPU_PROFILES[self.detected_vendor].get(self.active_profile, "--lowvram").split()
             py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
             main = str(ENGINE_DIR / "main.py")
+            
             args = [str(py), main, "--input-directory", str(BASE_DIR_PATH / "workspace/input"), 
                     "--output-directory", str(BASE_DIR_PATH / "workspace/output"),
                     "--extra-model-paths-config", str(BASE_DIR_PATH / "config/extra_model_paths.yaml"),
                     "--listen", "127.0.0.1", "--port", "8188"] + flags
+            
             try:
                 if os.name == "nt":
                     cmd = ' '.join([f'"{a}"' for a in args])
@@ -234,7 +256,7 @@ class App(ctk.CTk):
                 else:
                     log_f = open(ENGINE_DIR / "comfyui_stealth.log", "w")
                     self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(BASE_DIR_PATH))
-                messagebox.showinfo("Ignition", f"Motor disparado com perfil: {self.active_profile}")
+                self.log_acquisition.insert("end", f"[V] Ignition with profile: {self.active_profile}\n")
             except Exception as e: messagebox.showerror("Critical", str(e))
 
     def stop_studio(self):
@@ -247,17 +269,12 @@ class App(ctk.CTk):
             self.process = None
         self.status_indicator.configure(text="● SYSTEM OFFLINE", text_color="#ff4444")
 
-    def kill_port(self, port):
-        try:
-            if os.name == "nt": subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True)
-            else: subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
-        except: pass
-
     def check_status_loop(self):
         def check():
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1)
             online = s.connect_ex(('127.0.0.1', 8188)) == 0
-            self.status_indicator.configure(text="● SYSTEM OPERATIONAL" if online else "● SYSTEM OFFLINE", text_color="#44ff44" if online else "#ff4444")
+            self.status_indicator.configure(text="● SYSTEM OPERATIONAL" if online else "● SYSTEM OFFLINE", 
+                                            text_color="#44ff44" if online else "#ff4444")
             s.close(); self.after(5000, check)
         self.after(2000, check)
 
