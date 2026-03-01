@@ -1,0 +1,9 @@
+comfyui:
+    base_path: ../models
+    checkpoints: checkpoints
+    loras: loras
+    vae: vae
+    upscale_models: upscalers
+    controlnet: controlnet
+    clip: clip
+    diffusion_models: diffusion_models
