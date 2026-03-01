@@ -43,7 +43,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "2.3.0 (Neural Vision)"
+VERSION = "2.4.0 (Cognitive Gallery)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -53,6 +53,7 @@ ENGINE_DIR = BASE_DIR_PATH / "engine"
 MODELS_DIR = BASE_DIR_PATH / "models"
 CONFIG_FILE = BASE_DIR_PATH / "config" / "user_config.json"
 WORKFLOWS_DIR = BASE_DIR_PATH / "workspace" / "workflows"
+OUTPUT_DIR = BASE_DIR_PATH / "workspace" / "output"
 
 GPU_DATABASE = {
     "NVIDIA": {
@@ -92,7 +93,7 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title(f"AI NEURAL VIDEO STUDIO | {VERSION}")
-        self.geometry("1300x950")
+        self.geometry("1350x950")
         self.process = None
         self.saved_apis = []
         self.detected_vendor = "CPU"
@@ -110,7 +111,7 @@ class App(ctk.CTk):
         self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0, fg_color="#0a0a0a")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
-        ctk.CTkLabel(self.sidebar, text="NEURAL CORE 2.3", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
+        ctk.CTkLabel(self.sidebar, text="NEURAL CORE 2.4", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
         
         self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10)
         self.status_box.pack(padx=15, pady=5, fill="x")
@@ -139,42 +140,83 @@ class App(ctk.CTk):
         self.tabs.grid(row=0, column=1, padx=20, pady=10, sticky="nsew")
         
         self.tab_dl = self.tabs.add("📦 ACQUISITION"); self.tab_inv = self.tabs.add("📂 INVENTORY")
-        self.tab_canvas = self.tabs.add("🧠 NEURAL CANVAS"); self.tab_train = self.tabs.add("🚀 TRAINING")
-        self.tab_opt = self.tabs.add("⚙️ OPTIMIZER"); self.tab_vault = self.tabs.add("🔒 VAULT")
+        self.tab_gal = self.tabs.add("🖼️ GALLERY"); self.tab_canvas = self.tabs.add("🧠 NEURAL CANVAS")
+        self.tab_train = self.tabs.add("🚀 TRAINING"); self.tab_opt = self.tabs.add("⚙️ OPTIMIZER"); self.tab_vault = self.tabs.add("🔒 VAULT")
 
-        self.setup_acquisition_tab(); self.setup_inventory_tab(); self.setup_canvas_tab()
+        self.setup_acquisition_tab(); self.setup_inventory_tab(); self.setup_gallery_tab(); self.setup_canvas_tab()
         self.setup_training_tab(); self.setup_optimizer_tab(); self.setup_vault_tab()
 
         self.detect_hardware(); self.load_config()
         self.check_status_loop(); self.start_telemetry_loop()
 
-    def setup_inventory_tab(self):
-        f_main = ctk.CTkFrame(self.tab_inv, fg_color="transparent")
-        f_main.pack(fill="both", expand=True)
-        f_main.grid_columnconfigure(0, weight=1)
-        f_main.grid_columnconfigure(1, weight=1)
-        f_main.grid_rowconfigure(0, weight=1)
+    # --- GALLERY MODULE ---
+    def setup_gallery_tab(self):
+        f_main = ctk.CTkFrame(self.tab_gal, fg_color="transparent"); f_main.pack(fill="both", expand=True)
+        f_main.grid_columnconfigure(0, weight=1); f_main.grid_columnconfigure(1, weight=1); f_main.grid_rowconfigure(0, weight=1)
 
-        # Left: List
-        self.inv_box = ctk.CTkTextbox(f_main, font=("Consolas", 12), fg_color="#050505")
-        self.inv_box.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        self.gal_list = ctk.CTkScrollableFrame(f_main, label_text="OUTPUT REPOSITORY", fg_color="#050505")
+        self.gal_list.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         
-        # Right: Neural Insight Panel
+        self.f_gal_view = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333")
+        self.f_gal_view.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        
+        self.lbl_gal_img = ctk.CTkLabel(self.f_gal_view, text="Select an image to view metadata", width=500, height=500, fg_color="#050505", corner_radius=10)
+        self.lbl_gal_img.pack(padx=20, pady=20)
+        
+        self.txt_gal_meta = ctk.CTkTextbox(self.f_gal_view, height=250, font=("Consolas", 11), fg_color="transparent")
+        self.txt_gal_meta.pack(padx=20, pady=10, fill="both", expand=True)
+        
+        ctk.CTkButton(self.tab_gal, text="REFRESH GALLERY", command=lambda: self.refresh_gallery(), height=40).pack(pady=10)
+
+    def refresh_gallery(self):
+        for w in self.gal_list.winfo_children(): w.destroy()
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.lower().endswith((".png", ".jpg", ".webp"))], reverse=True)
+        for f in files:
+            path = OUTPUT_DIR / f
+            btn = ctk.CTkButton(self.gal_list, text=f"📷 {f}", anchor="w", fg_color="transparent", hover_color="#222", 
+                               command=lambda p=path: self.load_gallery_item(p))
+            btn.pack(fill="x", pady=1)
+
+    def load_gallery_item(self, path):
+        try:
+            img = Image.open(path)
+            # Extrar Metadados ComfyUI (Prompt)
+            meta_text = "Metadata Not Found."
+            if img.format == "PNG":
+                meta = img.info
+                if "prompt" in meta:
+                    p = json.loads(meta["prompt"])
+                    meta_text = f"--- COGNITIVE PROMPT ---\n{json.dumps(p, indent=2)}"
+            
+            # Update Preview
+            ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(500, 500))
+            self.lbl_gal_img.configure(image=ctk_img, text="")
+            self.txt_gal_meta.delete("1.0", "end"); self.txt_gal_meta.insert("end", meta_text)
+        except Exception as e: messagebox.showerror("Gallery Error", str(e))
+
+    # --- UPDATED INVENTORY (INTERACTIVE) ---
+    def setup_inventory_tab(self):
+        f_main = ctk.CTkFrame(self.tab_inv, fg_color="transparent"); f_main.pack(fill="both", expand=True)
+        f_main.grid_columnconfigure(0, weight=1); f_main.grid_columnconfigure(1, weight=1); f_main.grid_rowconfigure(0, weight=1)
+
+        self.inv_scroll = ctk.CTkScrollableFrame(f_main, label_text="NEURAL INVENTORY", fg_color="#050505")
+        self.inv_scroll.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        
         self.f_insight = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333")
         self.f_insight.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         
-        self.lbl_preview = ctk.CTkLabel(self.f_insight, text="Select a model to preview", width=400, height=400, fg_color="#050505", corner_radius=10)
+        self.lbl_preview = ctk.CTkLabel(self.f_insight, text="Neural Preview Hub", width=450, height=450, fg_color="#050505", corner_radius=10)
         self.lbl_preview.pack(padx=20, pady=20)
         
-        self.txt_meta = ctk.CTkTextbox(self.f_insight, height=200, font=("Consolas", 11), fg_color="transparent", border_width=0)
-        self.txt_meta.pack(padx=20, pady=10, fill="x")
+        self.txt_meta = ctk.CTkTextbox(self.f_insight, height=200, font=("Consolas", 11), fg_color="transparent")
+        self.txt_meta.pack(padx=20, pady=10, fill="both", expand=True)
         
         ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
-        self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total Size: 0.00 GB", font=("Consolas", 12, "bold"))
-        self.lbl_inv_total.pack(pady=5)
+        self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total Size: 0.00 GB", font=("Consolas", 12, "bold")); self.lbl_inv_total.pack(pady=5)
 
     def refresh_models_list(self):
-        self.inv_box.delete("1.0", "end")
+        for w in self.inv_scroll.winfo_children(): w.destroy()
         categories = {"checkpoints": [], "loras": [], "vae": [], "controlnet": [], "other": []}
         total_size = 0
         if MODELS_DIR.exists():
@@ -182,23 +224,36 @@ class App(ctk.CTk):
                 for f in files:
                     if f.endswith((".safetensors", ".ckpt")):
                         path = Path(root) / f; f_size = os.path.getsize(path) / (1024**3); total_size += f_size
-                        trigger = self.get_lora_trigger(str(path)) if "loras" in str(path).lower() else ""
-                        item = f"● {f} ({f_size:.2f} GB)"
                         
                         found = False
                         for cat in categories.keys():
-                            if cat in str(path).lower(): categories[cat].append((f, path, item, trigger)); found = True; break
-                        if not found: categories["other"].append((f, path, item, trigger))
+                            if cat in str(path).lower(): categories[cat].append((f, path, f_size)); found = True; break
+                        if not found: categories["other"].append((f, path, f_size))
             
             for cat, items in categories.items():
                 if items:
-                    self.inv_box.insert("end", f"\n--- {cat.upper()} ---\n")
-                    for name, path, label, trig in sorted(items): 
-                        self.inv_box.insert("end", f"{label} {trig}\n")
-                        # Em uma versão futura, adicionaremos o bind de clique aqui
+                    ctk.CTkLabel(self.inv_scroll, text=f"--- {cat.upper()} ---", text_color="#3b8ed0", font=("Consolas", 12, "bold")).pack(fill="x", pady=(10, 2))
+                    for name, path, size in sorted(items):
+                        btn = ctk.CTkButton(self.inv_scroll, text=f"● {name} ({size:.2f} GB)", anchor="w", fg_color="transparent", hover_color="#222",
+                                           command=lambda p=path, n=name, s=size: self.load_model_insight(p, n, s))
+                        btn.pack(fill="x", pady=1)
         self.lbl_inv_total.configure(text=f"Total Inventory Size: {total_size:.2f} GB")
 
-    # --- REMAINING METHODS (STABILIZED) ---
+    def load_model_insight(self, path, name, size):
+        trigger = self.get_lora_trigger(str(path))
+        info = f"NAME: {name}\nSIZE: {size:.2f} GB\nPATH: {path}\n\n{trigger}"
+        self.txt_meta.delete("1.0", "end"); self.txt_meta.insert("end", info)
+        
+        # Load Preview
+        prev_path = path.with_suffix(".preview.png")
+        if prev_path.exists():
+            img = Image.open(prev_path)
+            ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(450, 450))
+            self.lbl_preview.configure(image=ctk_img, text="")
+        else:
+            self.lbl_preview.configure(image=None, text="No Preview Found")
+
+    # --- BASE LOGIC (STABILIZED) ---
     def get_lora_trigger(self, file_path):
         try:
             with open(file_path, "rb") as f:
@@ -211,7 +266,7 @@ class App(ctk.CTk):
                     tag_dict = json.loads(tags) if isinstance(tags, str) and tags.startswith("{") else {}
                     if tag_dict:
                         main_tags = list(tag_dict.keys())[0] if isinstance(tag_dict, dict) else ""
-                        return f"[Tags: {str(main_tags)[:30]}...]"
+                        return f"COGNITIVE TAGS: {str(main_tags)}"
                 return ""
         except: return ""
 
@@ -411,13 +466,6 @@ class App(ctk.CTk):
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         for line in proc.stdout: self.log_acquisition.insert("end", f"[{time.strftime('%H:%M:%S')}] {line.strip()}\n"); self.log_acquisition.see("end")
         proc.wait(); self.after(500, self.refresh_models_list)
-
-    def refresh_canvas(self):
-        self.canvas_list.delete("1.0", "end")
-        WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
-        files = [f for f in os.listdir(WORKFLOWS_DIR) if f.endswith(".json")]
-        if not files: self.canvas_list.insert("end", "Nenhum fluxo (.json) encontrado em workspace/workflows/")
-        for f in sorted(files): self.canvas_list.insert("end", f"⚡ {f}\n")
 
     def dataset_wizard(self):
         trigger = self.entry_trigger.get().strip()
