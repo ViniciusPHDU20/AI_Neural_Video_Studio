@@ -37,7 +37,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.6.0 (Optimizer Edition)"
+VERSION = "1.6.1 (Industrial Restoration)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -47,7 +47,7 @@ ENGINE_DIR = BASE_DIR_PATH / "engine"
 MODELS_DIR = BASE_DIR_PATH / "models"
 CONFIG_FILE = BASE_DIR_PATH / "config" / "user_config.json"
 
-# --- PERFIS DE PERFORMANCE (HARDWARE PROFILES) ---
+# --- PERFIS DE PERFORMANCE ---
 GPU_PROFILES = {
     "NVIDIA": {
         "POTATO (2-4GB VRAM)": "--lowvram --fp8_e4m3fn-text-enc --disable-xformers",
@@ -61,6 +61,18 @@ GPU_PROFILES = {
     "CPU": {
         "SLOW MODE (No GPU)": "--cpu"
     }
+}
+
+# --- PRESETS DE MODELOS (RESTAURADOS) ---
+PRESET_MODELS = {
+    "Selecione um Preset de Engenharia...": {"id": "", "type": "checkpoints", "nsfw": False},
+    "● [BASE] Pony Diffusion V6 XL": {"id": "290640", "type": "checkpoints", "nsfw": True},
+    "● [BASE] RealVisXL V4.0 (Realismo)": {"id": "139562", "type": "checkpoints", "nsfw": False},
+    "● [BASE] Juggernaut XL (Cinema)": {"id": "133005", "type": "checkpoints", "nsfw": False},
+    "● [LORA] Realistic Skin & Details": {"id": "356417", "type": "loras", "nsfw": False},
+    "● [LORA] Cinematic Lighting": {"id": "341513", "type": "loras", "nsfw": False},
+    "● [LORA] Detailed Anatomy XL": {"id": "364522", "type": "loras", "nsfw": True},
+    "● [VAE] SDXL Official VAE": {"id": "290640", "type": "vae", "nsfw": False}
 }
 
 class App(ctk.CTk):
@@ -87,14 +99,17 @@ class App(ctk.CTk):
         self.status_indicator = ctk.CTkLabel(self.sidebar, text="● SYSTEM OFFLINE", text_color="#ff4444", font=ctk.CTkFont(size=12, weight="bold"))
         self.status_indicator.pack(pady=5)
 
-        self.btn_start = ctk.CTkButton(self.sidebar, text="IGNITION", command=self.start_studio, fg_color="#2d5a27", height=40)
+        self.btn_start = ctk.CTkButton(self.sidebar, text="IGNITION", command=self.start_studio, fg_color="#2d5a27", hover_color="#1e3d1a", height=40)
         self.btn_start.pack(padx=20, pady=10, fill="x")
 
-        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE", command=self.stop_studio, fg_color="#8b0000", height=40)
+        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE", command=self.stop_studio, fg_color="#8b0000", hover_color="#5a0000", height=40)
         self.btn_stop.pack(padx=20, pady=10, fill="x")
 
+        self.lbl_info = ctk.CTkLabel(self.sidebar, text=f"Station: ViniciusPHDU\nOS: {sys.platform.upper()}\nVersion: {VERSION}", justify="left", font=ctk.CTkFont(size=10), text_color="gray")
+        self.lbl_info.pack(side="bottom", pady=20)
+
         # --- TABS ---
-        self.tabs = ctk.CTkTabview(self, segmented_button_fg_color="#111111")
+        self.tabs = ctk.CTkTabview(self, segmented_button_fg_color="#111111", segmented_button_selected_color="#3b8ed0")
         self.tabs.grid(row=0, column=1, padx=20, pady=10, sticky="nsew")
         
         self.tab_dl = self.tabs.add("📦 ACQUISITION")
@@ -116,7 +131,8 @@ class App(ctk.CTk):
             if os.name == "nt":
                 cmd = 'powershell -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"'
             else:
-                cmd = "lspci | grep -i 'vga\|3d'"
+                # Corrigindo SyntaxWarning com raw string
+                cmd = r"lspci | grep -i 'vga\|3d'"
             
             output = subprocess.check_output(cmd, shell=True, text=True).upper()
             if "NVIDIA" in output: self.detected_vendor = "NVIDIA"
@@ -148,7 +164,6 @@ class App(ctk.CTk):
         profiles = list(GPU_PROFILES[self.detected_vendor].keys())
         self.profile_menu.configure(values=profiles)
         if profiles:
-            # Tentar carregar o que está no config, senão pega o primeiro
             default = self.active_profile if self.active_profile in profiles else profiles[0]
             self.profile_menu.set(default)
             self.set_profile(default)
@@ -160,11 +175,18 @@ class App(ctk.CTk):
         self.persist_config()
 
     def setup_acquisition_tab(self):
-        # Simplificado para foco em performance
+        self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=self.apply_preset, height=40)
+        self.preset_menu.pack(padx=20, pady=(20, 10), fill="x")
+
         self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI MODEL ID", height=45)
-        self.entry_id.pack(padx=20, pady=20, fill="x")
+        self.entry_id.pack(padx=20, pady=10, fill="x")
+        
+        self.option_type = ctk.CTkOptionMenu(self.tab_dl, values=["checkpoints", "loras", "vae", "controlnet"], height=40)
+        self.option_type.pack(padx=20, pady=10, fill="x")
+
         self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD TARGET", command=self.start_download, height=45, fg_color="#3b8ed0")
         self.btn_dl.pack(padx=20, pady=10, fill="x")
+        
         self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505")
         self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
 
@@ -179,55 +201,45 @@ class App(ctk.CTk):
     def setup_vault_tab(self):
         f = ctk.CTkFrame(self.tab_vault, fg_color="transparent")
         f.pack(padx=30, pady=30, fill="both", expand=True)
-        
         self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste Civitai API Key...", show="*", height=45)
         self.entry_api.pack(fill="x", pady=10)
-        
         ctk.CTkButton(f, text="REGISTER IN VAULT", command=self.save_api_key, height=40).pack(fill="x", pady=10)
-        
         self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED CREDENTIALS", fg_color="#0d0d0d")
         self.api_list_frame.pack(fill="both", expand=True, pady=20)
 
-    # --- LOGICA DE SEGURANÇA E PERFORMANCE ---
+    def apply_preset(self, choice):
+        p = PRESET_MODELS.get(choice)
+        if p and p["id"]:
+            self.entry_id.delete(0, "end")
+            self.entry_id.insert(0, p["id"])
+            self.option_type.set(p["type"])
 
     def validate_api_key(self, key):
-        # Civitai keys são geralmente strings hexadecimais de 32 caracteres
-        if not re.match(r"^[a-f0-9]{32}$", key.lower()):
-            return False
+        if not re.match(r"^[a-f0-9]{32}$", key.lower()): return False
         return True
 
     def save_api_key(self):
         key = self.entry_api.get().strip()
         if not self.validate_api_key(key):
-            messagebox.showerror("Invalid Format", "A chave inserida não é uma Civitai API Key válida.\nFormato esperado: 32 caracteres (letras e números).")
+            messagebox.showerror("Invalid Format", "A chave inserida não é uma Civitai API Key válida.")
             return
-        
         if key not in self.saved_apis:
-            self.saved_apis.append(key)
-            self.persist_config()
-            self.refresh_api_ui()
+            self.saved_apis.append(key); self.persist_config(); self.refresh_api_ui()
             messagebox.showinfo("Vault", "Chave autenticada e salva!")
         self.entry_api.delete(0, "end")
 
     def refresh_api_ui(self):
         for w in self.api_list_frame.winfo_children(): w.destroy()
         for key in self.saved_apis:
-            f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a")
-            f.pack(fill="x", pady=2, padx=5)
+            f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
             ctk.CTkLabel(f, text=f"ID: {key[:6]}***{key[-4:]}", font=("Consolas", 12)).pack(side="left", padx=10)
             ctk.CTkButton(f, text="REVOKE", width=70, height=22, fg_color="#444", command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
 
     def remove_api_key(self, key):
-        if key in self.saved_apis:
-            self.saved_apis.remove(key)
-            self.persist_config(); self.refresh_api_ui()
+        if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
 
     def persist_config(self):
-        data = {
-            "api_keys": self.saved_apis,
-            "hw_profile": self.active_profile,
-            "hw_vendor": self.detected_vendor
-        }
+        data = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor}
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(CONFIG_FILE, 'w') as f: json.dump(data, f, indent=4)
 
@@ -238,44 +250,50 @@ class App(ctk.CTk):
                     d = json.load(f)
                     self.saved_apis = d.get("api_keys", [])
                     self.active_profile = d.get("hw_profile", "")
-                self.refresh_api_ui()
-                self.refresh_optimizer_ui()
+                self.refresh_api_ui(); self.refresh_optimizer_ui()
             except: pass
 
     def start_studio(self):
         if self.process is None:
-            # 1. Kill zumbis
-            port = 8188
-            if os.name == "nt": subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True)
-            else: subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
-            time.sleep(1)
-
-            # 2. Get Flags do Perfil
+            self.kill_port(8188); time.sleep(1)
             flags = GPU_PROFILES[self.detected_vendor].get(self.active_profile, "--lowvram").split()
-            
             py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
-            main = ENGINE_DIR / "main.py"
+            main = str(ENGINE_DIR / "main.py")
             
-            args = [str(py), str(main), "--listen", "127.0.0.1", "--port", "8188"] + flags
+            # --- RESTAURAÇÃO DE CAMINHOS DO WORKSPACE ---
+            args = [
+                str(py), main,
+                "--input-directory", str(BASE_DIR_PATH / "workspace/input"),
+                "--output-directory", str(BASE_DIR_PATH / "workspace/output"),
+                "--extra-model-paths-config", str(BASE_DIR_PATH / "config/extra_model_paths.yaml"),
+                "--listen", "127.0.0.1", "--port", "8188"
+            ] + flags
             
             try:
                 if os.name == "nt":
-                    # Hard-quoted para Windows
                     cmd = ' '.join([f'"{a}"' for a in args])
                     self.process = subprocess.Popen(f'start "AI ENGINE" cmd /k {cmd}', shell=True, cwd=str(BASE_DIR_PATH))
                 else:
-                    # Stealth Linux
                     log_f = open(ENGINE_DIR / "comfyui_stealth.log", "w")
                     self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(BASE_DIR_PATH))
-                messagebox.showinfo("Success", f"Engine started with profile: {self.active_profile}")
+                self.log_acquisition.insert("end", f"[*] Ignition with profile: {self.active_profile}\n")
             except Exception as e: messagebox.showerror("Critical", str(e))
 
     def stop_studio(self):
+        self.kill_port(8188)
         if self.process:
-            if os.name == "nt": subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
-            else: self.process.terminate()
+            try:
+                if os.name == "nt": subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
+                else: self.process.terminate()
+            except: pass
             self.process = None
         self.status_indicator.configure(text="● SYSTEM OFFLINE", text_color="#ff4444")
+
+    def kill_port(self, port):
+        try:
+            if os.name == "nt": subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True)
+            else: subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
+        except: pass
 
     def check_status_loop(self):
         def check():
@@ -307,8 +325,11 @@ class App(ctk.CTk):
     def run_downloader(self, m_id):
         py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
         dl = get_short_path(TOOLS_DIR / "downloader.py")
-        cmd = [str(py), str(dl), m_id, "checkpoints"]
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        key = self.saved_apis[-1] if self.saved_apis else ""
+        cmd = [str(py), str(dl), m_id, self.option_type.get()]
+        env = os.environ.copy()
+        if key: env["CIVITAI_API_KEY"] = key
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         for line in proc.stdout: self.log_acquisition.insert("end", f"[{time.strftime('%H:%M:%S')}] {line.strip()}\n"); self.log_acquisition.see("end")
         proc.wait()
 
