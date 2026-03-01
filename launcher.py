@@ -41,7 +41,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.7.0 (Industrial Intelligence)"
+VERSION = "1.7.1 (Hardware Mapper)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -62,6 +62,11 @@ GPU_PROFILES = {
         "RX POWER (12GB+ - 6750 XT)": "--directml --normalvram --fp8_e4m3fn-text-enc"
     },
     "CPU": {"SLOW MODE": "--cpu"}
+}
+
+GPU_REFERENCES = {
+    "NVIDIA": "Ex: RTX 2060, 3050, 3060 (8GB), 3060 Ti, 4060, 4070, 4090",
+    "AMD": "Ex: RX 580, 6600, 6700 XT, 6750 XT, 7800 XT, 7900 XTX"
 }
 
 RAM_PROFILES = {
@@ -139,44 +144,43 @@ class App(ctk.CTk):
         self.check_status_loop()
         self.start_telemetry_loop()
 
-    def setup_acquisition_tab(self):
-        self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=lambda x: self.apply_preset(x), height=45)
-        self.preset_menu.pack(padx=20, pady=20, fill="x")
-        self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI ID", height=45); self.entry_id.pack(padx=20, pady=10, fill="x")
-        self.option_type = ctk.CTkOptionMenu(self.tab_dl, values=["checkpoints", "loras", "vae", "controlnet"], height=45); self.option_type.pack(padx=20, pady=10, fill="x")
-        self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD", command=lambda: self.start_download(), height=50); self.btn_dl.pack(padx=20, pady=10, fill="x")
-        self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505"); self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
-
-    def setup_inventory_tab(self):
-        self.inv_list = ctk.CTkTextbox(self.tab_inv, font=("Consolas", 12), fg_color="#050505")
-        self.inv_list.pack(padx=20, pady=20, fill="both", expand=True)
-        ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
-
-    def setup_training_tab(self):
-        f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=20, fill="x")
-        self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=40); self.train_base_model.pack(padx=20, pady=10, fill="x")
-        self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=40); self.train_lora_name.pack(padx=20, pady=10, fill="x")
-        self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=40); self.entry_trigger.pack(padx=20, pady=10, fill="x")
-        ctk.CTkButton(f, text="DATASET WIZARD", command=lambda: self.dataset_wizard(), fg_color="#4B0082", height=40).pack(pady=5)
-        self.btn_train = ctk.CTkButton(self.tab_train, text="START TRAINING", command=lambda: self.start_training(), fg_color="#FF8C00", height=45); self.btn_train.pack(padx=20, pady=10, fill="x")
-        self.log_train = ctk.CTkTextbox(self.tab_train, height=250, font=("Consolas", 11), fg_color="#050505"); self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
-
     def setup_optimizer_tab(self):
         f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
-        f.pack(padx=40, pady=40, fill="both", expand=True)
-        ctk.CTkLabel(f, text="ACCELERATION & RAM MANAGER", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=20)
-        self.lbl_detected = ctk.CTkLabel(f, text="DETECTED GPU: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=10)
+        f.pack(padx=40, pady=20, fill="both", expand=True)
+        
+        ctk.CTkLabel(f, text="ACCELERATION & RAM MANAGER", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=15)
+        self.lbl_detected = ctk.CTkLabel(f, text="DETECTED GPU: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=5)
+        
+        self.lbl_ref = ctk.CTkLabel(f, text="Compatibilidade: ---", text_color="gray", font=("Consolas", 10)); self.lbl_ref.pack(pady=5)
+
+        ctk.CTkLabel(f, text="Perfil de GPU (VRAM):", text_color="gray").pack(pady=(15, 0))
         self.profile_menu = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=350, height=40); self.profile_menu.pack(pady=5)
-        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=350, height=40); self.ram_menu.pack(pady=10)
-        self.lbl_flags = ctk.CTkLabel(f, text="Flags: ---", font=("Consolas", 10), text_color="gray", wraplength=400); self.lbl_flags.pack(pady=20)
+        
+        ctk.CTkLabel(f, text="Gerenciamento de RAM (Sistema):", text_color="gray").pack(pady=(15, 0))
+        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=350, height=40); self.ram_menu.pack(pady=5)
+        self.ram_menu.set(self.active_ram_profile)
 
-    def setup_vault_tab(self):
-        f = ctk.CTkFrame(self.tab_vault, fg_color="transparent"); f.pack(padx=30, pady=30, fill="both", expand=True)
-        self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste API Key...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
-        ctk.CTkButton(f, text="SAVE TO VAULT", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
-        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
+        self.lbl_flags = ctk.CTkLabel(f, text="Flags: ---", font=("Consolas", 10), text_color="#444", wraplength=400); self.lbl_flags.pack(pady=20)
 
-    # --- LOGIC ---
+    def refresh_optimizer_ui(self):
+        self.lbl_detected.configure(text=f"HARDWARE: {self.detected_vendor}")
+        self.lbl_ref.configure(text=GPU_REFERENCES.get(self.detected_vendor, "CPU Mode: Baixa performance"))
+        
+        p = list(GPU_PROFILES[self.detected_vendor].keys())
+        self.profile_menu.configure(values=p)
+        if p:
+            d = self.active_profile if self.active_profile in p else p[0]
+            self.profile_menu.set(d); self.set_profile(d)
+
+    def set_profile(self, choice):
+        self.active_profile = choice
+        gpu_flags = GPU_PROFILES[self.detected_vendor].get(choice, "")
+        ram_flags = RAM_PROFILES.get(self.active_ram_profile, "")
+        self.lbl_flags.configure(text=f"ENGINE FLAGS: {gpu_flags} {ram_flags}")
+        self.persist_config()
+
+    def set_ram_profile(self, choice):
+        self.active_ram_profile = choice; self.set_profile(self.active_profile)
 
     def detect_hardware(self):
         try:
@@ -201,6 +205,33 @@ class App(ctk.CTk):
                 time.sleep(3)
         threading.Thread(target=update, daemon=True).start()
 
+    def setup_acquisition_tab(self):
+        self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=lambda x: self.apply_preset(x), height=45); self.preset_menu.pack(padx=20, pady=20, fill="x")
+        self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI ID", height=45); self.entry_id.pack(padx=20, pady=10, fill="x")
+        self.option_type = ctk.CTkOptionMenu(self.tab_dl, values=["checkpoints", "loras", "vae", "controlnet"], height=45); self.option_type.pack(padx=20, pady=10, fill="x")
+        self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD", command=lambda: self.start_download(), height=50); self.btn_dl.pack(padx=20, pady=10, fill="x")
+        self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505"); self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
+
+    def setup_inventory_tab(self):
+        self.inv_list = ctk.CTkTextbox(self.tab_inv, font=("Consolas", 12), fg_color="#050505")
+        self.inv_list.pack(padx=20, pady=20, fill="both", expand=True)
+        ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
+
+    def setup_training_tab(self):
+        f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=20, fill="x")
+        self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=40); self.train_base_model.pack(padx=20, pady=10, fill="x")
+        self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=40); self.train_lora_name.pack(padx=20, pady=10, fill="x")
+        self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=40); self.entry_trigger.pack(padx=20, pady=10, fill="x")
+        ctk.CTkButton(f, text="DATASET WIZARD", command=lambda: self.dataset_wizard(), fg_color="#4B0082", height=40).pack(pady=5)
+        self.btn_train = ctk.CTkButton(self.tab_train, text="START TRAINING", command=lambda: self.start_training(), fg_color="#FF8C00", height=45); self.btn_train.pack(padx=20, pady=10, fill="x")
+        self.log_train = ctk.CTkTextbox(self.tab_train, height=250, font=("Consolas", 11), fg_color="#050505"); self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
+
+    def setup_vault_tab(self):
+        f = ctk.CTkFrame(self.tab_vault, fg_color="transparent"); f.pack(padx=30, pady=30, fill="both", expand=True)
+        self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste API Key...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
+        ctk.CTkButton(f, text="SAVE TO VAULT", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
+        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
+
     def save_api_key(self):
         key = self.entry_api.get().strip()
         if len(key) >= 15 and " " not in key:
@@ -212,7 +243,7 @@ class App(ctk.CTk):
         for key in self.saved_apis:
             f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
             ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
-            ctk.CTkButton(f, text="REVOKE", width=70, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
+            ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
 
     def remove_api_key(self, key):
         if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
@@ -281,20 +312,6 @@ class App(ctk.CTk):
             self.status_indicator.configure(text="● SYSTEM OPERATIONAL" if online else "● SYSTEM OFFLINE", text_color="#44ff44" if online else "#ff4444")
             s.close(); self.after(5000, check)
         self.after(2000, check)
-
-    def set_profile(self, choice):
-        self.active_profile = choice; self.lbl_flags.configure(text=f"FLAGS: {GPU_PROFILES[self.detected_vendor][choice]} {RAM_PROFILES[self.active_ram_profile]}"); self.persist_config()
-
-    def set_ram_profile(self, choice):
-        self.active_ram_profile = choice; self.set_profile(self.active_profile)
-
-    def refresh_optimizer_ui(self):
-        self.lbl_detected.configure(text=f"HARDWARE: {self.detected_vendor}")
-        p = list(GPU_PROFILES[self.detected_vendor].keys())
-        self.profile_menu.configure(values=p)
-        if p:
-            d = self.active_profile if self.active_profile in p else p[0]
-            self.profile_menu.set(d); self.set_profile(d)
 
     def apply_preset(self, choice):
         p = PRESET_MODELS.get(choice)

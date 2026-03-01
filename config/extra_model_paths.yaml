@@ -1,5 +1,5 @@
 comfyui:
-    base_path: ../models
+    base_path: ./models
     checkpoints: checkpoints
     loras: loras
     vae: vae
