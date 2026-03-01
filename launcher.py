@@ -11,6 +11,7 @@ import socket
 import shutil
 import time
 import re
+import struct
 try:
     import psutil
 except ImportError:
@@ -42,7 +43,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.8.0 (Neural Architect)"
+VERSION = "1.8.1 (Neural Insight)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -92,20 +93,21 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title(f"AI NEURAL VIDEO STUDIO | {VERSION}")
-        self.geometry("1100x900")
+        self.geometry("1150x950")
         self.process = None
         self.saved_apis = []
         self.detected_vendor = "CPU"
         self.detected_vram = 0
         self.active_profile = ""
         self.active_ram_profile = "Balanced (Padrao)"
+        self.expert_flags = ""
 
         # Layout
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
         # --- SIDEBAR ---
-        self.sidebar = ctk.CTkFrame(self, width=240, corner_radius=0, fg_color="#0d0d0d")
+        self.sidebar = ctk.CTkFrame(self, width=260, corner_radius=0, fg_color="#0d0d0d")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
         ctk.CTkLabel(self.sidebar, text="NEURAL CORE", font=ctk.CTkFont(size=22, weight="bold", family="Consolas")).pack(pady=25)
@@ -122,6 +124,10 @@ class App(ctk.CTk):
         self.lbl_cpu = ctk.CTkLabel(self.telemetry_box, text="CPU: ---", font=("Consolas", 11)); self.lbl_cpu.pack(pady=2)
         self.lbl_vram = ctk.CTkLabel(self.telemetry_box, text="VRAM: ---", font=("Consolas", 11)); self.lbl_vram.pack(pady=2)
         self.lbl_disk = ctk.CTkLabel(self.telemetry_box, text="DISK: ---", font=("Consolas", 11)); self.lbl_disk.pack(pady=2)
+
+        # Maintenance Tools
+        self.btn_purge = ctk.CTkButton(self.sidebar, text="SYSTEM PURGE", command=lambda: self.system_purge(), fg_color="#444", height=30, font=ctk.CTkFont(size=10))
+        self.btn_purge.pack(padx=20, pady=10, fill="x")
 
         self.btn_start = ctk.CTkButton(self.sidebar, text="IGNITION", command=lambda: self.start_studio(), fg_color="#2d5a27", hover_color="#1e3d1a", height=45, font=ctk.CTkFont(weight="bold"))
         self.btn_start.pack(padx=20, pady=10, fill="x")
@@ -142,19 +148,63 @@ class App(ctk.CTk):
         self.check_status_loop()
         self.start_telemetry_loop()
 
+    # --- METADATA READER (GOD MODE) ---
+    def get_lora_trigger(self, file_path):
+        try:
+            with open(file_path, "rb") as f:
+                header_size = struct.unpack("<Q", f.read(8))[0]
+                header_json = f.read(header_size).decode("utf-8")
+                header = json.loads(header_json)
+                metadata = header.get("__metadata__", {})
+                # Tentar extrair tags ou trigger word
+                tags = metadata.get("ss_tag_frequency", "")
+                if tags:
+                    # Pegar as tags mais frequentes
+                    tag_dict = json.loads(tags) if isinstance(tags, str) and tags.startswith("{") else {}
+                    if tag_dict:
+                        main_tags = list(tag_dict.keys())[0] if isinstance(tag_dict, dict) else ""
+                        return f"[Tags: {str(main_tags)[:30]}...]"
+                return ""
+        except: return ""
+
     def setup_optimizer_tab(self):
         f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
         f.pack(padx=40, pady=20, fill="both", expand=True)
         ctk.CTkLabel(f, text="INTELLIGENT HARDWARE OPTIMIZER", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=15)
         self.lbl_detected = ctk.CTkLabel(f, text="DETECTED GPU: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=5)
         self.lbl_vram_total = ctk.CTkLabel(f, text="TOTAL VRAM: ---", text_color="white", font=("Consolas", 12)); self.lbl_vram_total.pack(pady=5)
-        self.lbl_ref = ctk.CTkLabel(f, text="Compatibilidade: ---", text_color="gray", font=("Consolas", 10)); self.lbl_ref.pack(pady=5)
         
-        ctk.CTkLabel(f, text="Performance Profile (VRAM):", text_color="gray").pack(pady=(15, 0))
+        ctk.CTkLabel(f, text="Performance Profile:", text_color="gray").pack(pady=(10, 0))
         self.profile_menu = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=350, height=40); self.profile_menu.pack(pady=5)
-        ctk.CTkLabel(f, text="System RAM Shield:", text_color="gray").pack(pady=(10, 0))
-        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=350, height=40); self.ram_menu.pack(pady=5)
-        self.lbl_flags = ctk.CTkLabel(f, text="Flags: ---", font=("Consolas", 10), text_color="#444", wraplength=450); self.lbl_flags.pack(pady=20)
+        
+        ctk.CTkLabel(f, text="Expert Engine Flags (Manual Injection):", text_color="#FF8C00").pack(pady=(15, 0))
+        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Ex: --cuda-malloc --disable-smart-memory", height=40, width=400); self.entry_expert.pack(pady=5)
+        self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
+
+        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=500); self.lbl_flags.pack(pady=20)
+
+    def update_expert_flags(self):
+        self.expert_flags = self.entry_expert.get().strip()
+        self.update_flags_preview()
+        self.persist_config()
+
+    def update_flags_preview(self):
+        gpu_f = GPU_PROFILES[self.detected_vendor].get(self.active_profile, "")
+        ram_f = RAM_PROFILES.get(self.active_ram_profile, "")
+        total = f"{gpu_f} {ram_f} {self.expert_flags}".strip()
+        self.lbl_flags.configure(text=f"ENGINE FLAGS: {total}")
+
+    def system_purge(self):
+        if not messagebox.askyesno("Purge", "Deseja realizar a limpeza profunda do motor?\n(Logs e arquivos temporários)"): return
+        try:
+            # Clean logs
+            log = ENGINE_DIR / "comfyui_stealth.log"
+            if log.exists(): log.write_text("")
+            # Clean ComfyUI temp
+            temp = ENGINE_DIR / "temp"
+            if temp.exists(): shutil.rmtree(temp); temp.mkdir()
+            messagebox.showinfo("Success", "Sistema purificado e otimizado!")
+        except Exception as e: messagebox.showerror("Error", str(e))
 
     def detect_hardware(self):
         try:
@@ -166,8 +216,6 @@ class App(ctk.CTk):
                 out = subprocess.check_output(r"lspci | grep -i 'vga\|3d'", shell=True, text=True).upper()
                 if "NVIDIA" in out: self.detected_vendor = "NVIDIA"
                 elif "AMD" in out or "RADEON" in out: self.detected_vendor = "AMD"
-            
-            # Fetch Total VRAM
             if self.detected_vendor == "NVIDIA":
                 v_out = subprocess.check_output("nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits", shell=True, text=True).strip()
                 self.detected_vram = int(v_out)
@@ -178,24 +226,20 @@ class App(ctk.CTk):
         self.refresh_optimizer_ui(); self.auto_suggest_profile()
 
     def auto_suggest_profile(self):
-        if self.detected_vram > 0:
+        if self.detected_vram > 0 and not self.active_profile:
             if self.detected_vram <= 4096: p = "POTATO (2-4GB VRAM)"
             elif self.detected_vram <= 10240: p = "INDUSTRIAL (8GB - 3060 Ti)"
             else: p = "GOD MODE (16-24GB VRAM)"
-            if self.detected_vendor == "AMD":
-                p = "RX BUDGET (4-6GB VRAM)" if self.detected_vram <= 6144 else "RX POWER (12GB+ - 6750 XT)"
-            
-            if not self.active_profile: self.profile_menu.set(p); self.set_profile(p)
+            if self.detected_vendor == "AMD": p = "RX BUDGET (4-6GB VRAM)" if self.detected_vram <= 6144 else "RX POWER (12GB+ - 6750 XT)"
+            self.profile_menu.set(p); self.set_profile(p)
 
     def start_telemetry_loop(self):
         def update():
             while True:
                 try:
                     if psutil: self.lbl_cpu.configure(text=f"CPU LOAD: {psutil.cpu_percent()}%")
-                    # Disk Telemetry
                     usage = psutil.disk_usage(str(MODELS_DIR))
                     self.lbl_disk.configure(text=f"DISK FREE: {usage.free // (1024**3)} GB")
-                    # VRAM Telemetry
                     if self.detected_vendor == "NVIDIA":
                         v = subprocess.check_output("nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits", shell=True, text=True, timeout=1).strip()
                         self.lbl_vram.configure(text=f"VRAM USED: {v} MB")
@@ -208,7 +252,8 @@ class App(ctk.CTk):
             self.kill_port(8188); time.sleep(2)
             gpu_f = GPU_PROFILES[self.detected_vendor].get(self.active_profile, "").split()
             ram_f = RAM_PROFILES.get(self.active_ram_profile, "").split()
-            flags = list(set(gpu_f + ram_f))
+            exp_f = self.expert_flags.split()
+            flags = list(set(gpu_f + ram_f + exp_f))
             py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
             main = str(ENGINE_DIR / "main.py")
             args = [str(py), main, "--input-directory", str(BASE_DIR_PATH / "workspace/input"), 
@@ -259,34 +304,19 @@ class App(ctk.CTk):
         ctk.CTkButton(f, text="SAVE TO VAULT", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
         self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
 
-    def refresh_api_ui(self):
-        for w in self.api_list_frame.winfo_children(): w.destroy()
-        for key in self.saved_apis:
-            f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
-            ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
-            ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
-
-    def remove_api_key(self, key):
-        if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
-
-    def save_api_key(self):
-        key = self.entry_api.get().strip()
-        if len(key) >= 15 and " " not in key:
-            if key not in self.saved_apis: self.saved_apis.append(key); self.persist_config(); self.refresh_api_ui()
-        self.entry_api.delete(0, "end")
-
     def load_config(self):
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, 'r') as f:
                     d = json.load(f); self.saved_apis = d.get("api_keys", [])
-                    if not self.saved_apis and d.get("civitai_api_key"): self.saved_apis = [d.get("civitai_api_key")]
                     self.active_profile = d.get("hw_profile", ""); self.active_ram_profile = d.get("ram_profile", "Balanced (Padrao)")
-                self.refresh_api_ui(); self.refresh_optimizer_ui(); self.ram_menu.set(self.active_ram_profile)
+                    self.expert_flags = d.get("expert_flags", "")
+                self.refresh_api_ui(); self.refresh_optimizer_ui()
+                self.entry_expert.insert(0, self.expert_flags)
             except: pass
 
     def persist_config(self):
-        d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "ram_profile": self.active_ram_profile}
+        d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "ram_profile": self.active_ram_profile, "expert_flags": self.expert_flags}
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
         temp_file = CONFIG_FILE.with_suffix(".tmp")
         with open(temp_file, 'w') as f: json.dump(d, f, indent=4)
@@ -319,15 +349,14 @@ class App(ctk.CTk):
         self.after(2000, check)
 
     def set_profile(self, choice):
-        self.active_profile = choice; self.lbl_flags.configure(text=f"FLAGS: {GPU_PROFILES[self.detected_vendor][choice]} {RAM_PROFILES[self.active_ram_profile]}"); self.persist_config()
+        self.active_profile = choice; self.update_flags_preview(); self.persist_config()
 
     def set_ram_profile(self, choice):
-        self.active_ram_profile = choice; self.set_profile(self.active_profile)
+        self.active_ram_profile = choice; self.update_flags_preview(); self.persist_config()
 
     def refresh_optimizer_ui(self):
         self.lbl_detected.configure(text=f"HARDWARE: {self.detected_vendor}")
         self.lbl_vram_total.configure(text=f"TOTAL VRAM: {self.detected_vram} MB")
-        self.lbl_ref.configure(text=GPU_REFERENCES.get(self.detected_vendor, "CPU Mode: Low Performance"))
         p = list(GPU_PROFILES[self.detected_vendor].keys())
         self.profile_menu.configure(values=p)
         if p:
@@ -362,7 +391,13 @@ class App(ctk.CTk):
                         path = Path(root) / f
                         f_size = os.path.getsize(path) / (1024**3)
                         total_size += f_size
-                        item = f"● {f} ({f_size:.2f} GB)"
+                        
+                        trigger = ""
+                        if "loras" in str(path).lower():
+                            trigger = self.get_lora_trigger(str(path))
+                        
+                        item = f"● {f} ({f_size:.2f} GB) {trigger}"
+                        
                         found = False
                         for cat in categories.keys():
                             if cat in str(path).lower(): categories[cat].append(item); found = True; break
