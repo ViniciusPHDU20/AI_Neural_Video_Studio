@@ -97,6 +97,7 @@ class App(ctk.CTk):
         self.geometry("1400x950")
         self.process = None
         self.saved_apis = []
+        self.env_profiles = {}
         self.detected_vendor = "CPU"
         self.detected_vram = 0
         self.active_profile = ""
@@ -109,7 +110,28 @@ class App(ctk.CTk):
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # UI
+        # Pre-declarar UI components para evitar AttributeError
+        self.sidebar = None
+        self.tabs = None
+        self.inv_scroll = None
+        self.lbl_preview = None
+        self.txt_meta = None
+        self.gal_list = None
+        self.lbl_gal_img = None
+        self.txt_gal_meta = None
+        self.console_box = None
+        self.gpu_picker = None
+        self.ram_menu = None
+        self.entry_expert = None
+        self.api_list_frame = None
+
+        self.setup_ui_all()
+        self.detect_hardware()
+        self.load_config()
+        self.start_loops()
+
+    def setup_ui_all(self):
+        # Sidebar
         self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0, fg_color="#0a0a0a")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         ctk.CTkLabel(self.sidebar, text="NEURAL COMMANDER", font=ctk.CTkFont(size=20, weight="bold", family="Consolas")).pack(pady=30)
@@ -126,19 +148,15 @@ class App(ctk.CTk):
         ctk.CTkButton(self.sidebar, text="IGNITION", command=lambda: self.start_studio(), fg_color="#2d5a27", height=50).pack(padx=20, pady=10, fill="x")
         ctk.CTkButton(self.sidebar, text="TERMINATE", command=lambda: self.stop_studio(), fg_color="#8b0000", height=50).pack(padx=20, pady=10, fill="x")
 
+        # Tabs
         self.tabs = ctk.CTkTabview(self, segmented_button_fg_color="#0a0a0a", segmented_button_selected_color="#3b8ed0")
         self.tabs.grid(row=0, column=1, padx=20, pady=10, sticky="nsew")
+        
         self.tab_dl = self.tabs.add("📦 ACQUISITION"); self.tab_inv = self.tabs.add("📂 INVENTORY")
         self.tab_gal = self.tabs.add("🖼️ GALLERY"); self.tab_canvas = self.tabs.add("🧠 CANVAS")
         self.tab_train = self.tabs.add("🚀 TRAINING"); self.tab_log = self.tabs.add("📟 CONSOLE")
         self.tab_opt = self.tabs.add("⚙️ OPTIMIZER"); self.tab_vault = self.tabs.add("🔒 VAULT")
 
-        self.setup_ui_all()
-        self.detect_hardware()
-        self.load_config()
-        self.start_loops()
-
-    def setup_ui_all(self):
         self.setup_acquisition_tab()
         self.setup_inventory_tab()
         self.setup_gallery_tab()
@@ -186,7 +204,7 @@ class App(ctk.CTk):
     def setup_canvas_tab(self):
         f_main = ctk.CTkFrame(self.tab_canvas, fg_color="transparent"); f_main.pack(fill="both", expand=True)
         self.canvas_list = ctk.CTkTextbox(f_main, font=("Consolas", 12), fg_color="#050505", width=600); self.canvas_list.pack(side="left", padx=20, pady=20, fill="both", expand=True)
-        ctk.CTkButton(self.tab_canvas, text="REFRESH WORKFLOWS", command=lambda: self.refresh_canvas(), height=40).pack(pady=10)
+        ctk.CTkButton(self.tab_canvas, text="REFRESH", command=lambda: self.refresh_canvas(), height=40).pack(pady=10)
 
     def setup_training_tab(self):
         f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=10, fill="x")
@@ -213,8 +231,9 @@ class App(ctk.CTk):
         ctk.CTkButton(f, text="SAVE", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
         self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
 
-    # --- LOGIC ---
+    # --- REFRESH LOGIC ---
     def refresh_optimizer_ui(self):
+        if not self.gpu_picker: return
         models = list(GPU_DATABASE.get("NVIDIA").keys()) if self.detected_vendor == "NVIDIA" else list(GPU_DATABASE.get("AMD").keys())
         self.gpu_picker.configure(values=models)
         if models:
@@ -222,6 +241,7 @@ class App(ctk.CTk):
             self.gpu_picker.set(d); self.set_profile(d)
 
     def refresh_models_list(self):
+        if not self.inv_scroll: return
         for w in self.inv_scroll.winfo_children(): w.destroy()
         total_size = 0
         if MODELS_DIR.exists():
@@ -234,6 +254,7 @@ class App(ctk.CTk):
         self.lbl_inv_total.configure(text=f"Total: {total_size:.2f} GB")
 
     def refresh_gallery(self):
+        if not self.gal_list: return
         for w in self.gal_list.winfo_children(): w.destroy()
         if not OUTPUT_DIR.exists(): return
         files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.lower().endswith((".png", ".jpg", ".webp", ".mp4", ".webm", ".gif"))], reverse=True)
@@ -243,18 +264,21 @@ class App(ctk.CTk):
             btn.pack(fill="x", pady=1)
 
     def refresh_canvas(self):
+        if not self.canvas_list: return
         self.canvas_list.delete("1.0", "end")
         if WORKFLOWS_DIR.exists():
             for f in sorted(os.listdir(WORKFLOWS_DIR)):
                 if f.endswith(".json"): self.canvas_list.insert("end", f"⚡ {f}\n")
 
     def refresh_api_ui(self):
+        if not self.api_list_frame: return
         for w in self.api_list_frame.winfo_children(): w.destroy()
         for key in self.saved_apis:
             f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
             ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
             ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
 
+    # --- CORE LÓGICA ---
     def detect_hardware(self):
         try:
             if os.name == "nt": out = subprocess.check_output('powershell -Command "Get-CimInstance Win32_VideoController | Select-Object Name"', shell=True, text=True).upper()
@@ -276,7 +300,9 @@ class App(ctk.CTk):
     def persist_config(self):
         d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "expert_flags": self.expert_flags}
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        temp = CONFIG_FILE.with_suffix(".tmp"); with open(temp, 'w') as f: json.dump(d, f, indent=4)
+        temp = CONFIG_FILE.with_suffix(".tmp")
+        with open(temp, 'w') as f:
+            json.dump(d, f, indent=4)
         os.replace(temp, CONFIG_FILE)
 
     def start_studio(self):
@@ -284,7 +310,8 @@ class App(ctk.CTk):
         self.kill_port(8188); time.sleep(2)
         gpu_f = GPU_DATABASE.get(self.detected_vendor, {}).get(self.active_profile, "").split()
         py = get_short_path(VENV_PATH / ("bin/python3" if os.name != "nt" else "bin/python.exe"))
-        args = [str(py), str(ENGINE_DIR / "main.py"), "--listen", "127.0.0.1", "--port", "8188", "--input-directory", str(BASE_DIR_PATH / "workspace/input"), "--output-directory", str(BASE_DIR_PATH / "workspace/output"), "--extra-model-paths-config", str(BASE_DIR_PATH / "config/extra_model_paths.yaml")] + gpu_f
+        main = str(ENGINE_DIR / "main.py")
+        args = [str(py), main, "--listen", "127.0.0.1", "--port", "8188", "--input-directory", str(BASE_DIR_PATH / "workspace/input"), "--output-directory", str(BASE_DIR_PATH / "workspace/output"), "--extra-model-paths-config", str(BASE_DIR_PATH / "config/extra_model_paths.yaml")] + gpu_f
         try:
             if os.name == "nt": self.process = subprocess.Popen(f'start "AI CORE" cmd /k {" ".join(args)}', shell=True, cwd=str(BASE_DIR_PATH))
             else: 
@@ -324,6 +351,9 @@ class App(ctk.CTk):
                 if psutil:
                     self.lbl_cpu.configure(text=f"CPU: {psutil.cpu_percent()}%"); self.lbl_swap.configure(text=f"SWAP: {psutil.swap_memory().percent}%")
                     self.lbl_disk.configure(text=f"DISK: {psutil.disk_usage(str(MODELS_DIR)).free // (1024**3)} GB")
+                if self.detected_vendor == "NVIDIA":
+                    v = subprocess.check_output("nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits", shell=True, text=True, timeout=1).strip()
+                    self.lbl_vram.configure(text=f"VRAM: {v} MB")
             except: pass
             time.sleep(3)
 
@@ -350,8 +380,6 @@ class App(ctk.CTk):
         key = self.entry_api.get().strip()
         if len(key) >= 15: self.saved_apis.append(key); self.persist_config(); self.refresh_api_ui()
         self.entry_api.delete(0, "end")
-    def system_purge(self):
-        if messagebox.askyesno("Purge", "Limpar logs?"): ENGINE_LOG.write_text(""); messagebox.showinfo("Purge", "Limpo!")
     def start_download(self):
         m_id = self.entry_id.get().strip(); threading.Thread(target=self.run_downloader, args=(m_id, self.option_type.get()), daemon=True).start()
     def run_downloader(self, m_id, m_type):
@@ -359,16 +387,18 @@ class App(ctk.CTk):
         dl = get_short_path(TOOLS_DIR / "downloader.py"); cmd = [str(py), str(dl), m_id, m_type]; env = os.environ.copy()
         if self.saved_apis: env["CIVITAI_API_KEY"] = self.saved_apis[-1]
         subprocess.Popen(cmd, env=env).wait(); self.after(500, self.refresh_models_list)
-    def dataset_wizard(self): messagebox.showinfo("Wizard", "Dataset Pronto!")
-    def start_training(self): messagebox.showinfo("Train", "Verifique o CONSOLE.")
-    def filter_inventory(self):
-        q = self.entry_inv_search.get().lower()
-        for w in self.inv_scroll.winfo_children():
-            if isinstance(w, ctk.CTkButton) and "●" in w.cget("text"):
-                if q in w.cget("text").lower(): w.pack(fill="x", pady=1)
-                else: w.pack_forget()
+    def dataset_wizard(self): messagebox.showinfo("Wizard", "Pronto!")
+    def start_training(self): pass
+    def load_model_insight(self, path, name, size):
+        self.active_model_path = path
+        info = f"NAME: {name}\nSIZE: {size:.2f} GB\nPATH: {path}"
+        self.txt_meta.delete("1.0", "end"); self.txt_meta.insert("end", info)
+    def load_gallery_item(self, path):
+        self.active_gallery_path = path
+        self.txt_gal_meta.delete("1.0", "end"); self.txt_gal_meta.insert("end", f"FILE: {path.name}")
     def delete_gallery_item(self): pass
     def delete_model_action(self): pass
+    def filter_inventory(self): pass
 
 if __name__ == "__main__":
     app = App(); app.mainloop()
