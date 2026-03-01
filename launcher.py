@@ -303,7 +303,9 @@ class App(ctk.CTk):
     def persist_config(self):
         d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "expert_flags": self.expert_flags}
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        temp = CONFIG_FILE.with_suffix(".tmp"); with open(temp, 'w') as f: json.dump(d, f, indent=4)
+        temp = CONFIG_FILE.with_suffix(".tmp")
+        with open(temp, 'w') as f:
+            json.dump(d, f, indent=4)
         os.replace(temp, CONFIG_FILE)
 
     def start_studio(self):
