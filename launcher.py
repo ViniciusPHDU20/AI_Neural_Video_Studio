@@ -43,7 +43,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.8.1 (Neural Insight)"
+VERSION = "1.9.0 (Neural Vision)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -93,7 +93,7 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title(f"AI NEURAL VIDEO STUDIO | {VERSION}")
-        self.geometry("1150x950")
+        self.geometry("1200x950")
         self.process = None
         self.saved_apis = []
         self.detected_vendor = "CPU"
@@ -107,31 +107,33 @@ class App(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
 
         # --- SIDEBAR ---
-        self.sidebar = ctk.CTkFrame(self, width=260, corner_radius=0, fg_color="#0d0d0d")
+        self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0, fg_color="#0d0d0d")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
-        ctk.CTkLabel(self.sidebar, text="NEURAL CORE", font=ctk.CTkFont(size=22, weight="bold", family="Consolas")).pack(pady=25)
+        ctk.CTkLabel(self.sidebar, text="NEURAL CORE", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
         
         self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10)
         self.status_box.pack(padx=15, pady=5, fill="x")
         self.status_indicator = ctk.CTkLabel(self.status_box, text="● SYSTEM OFFLINE", text_color="#ff4444", font=ctk.CTkFont(size=12, weight="bold"))
         self.status_indicator.pack(pady=10)
 
-        # Telemetry Hub
+        # Advanced Telemetry Hub
         self.telemetry_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10)
         self.telemetry_box.pack(padx=15, pady=15, fill="x")
-        ctk.CTkLabel(self.telemetry_box, text="LIVE TELEMETRY", font=ctk.CTkFont(size=10, weight="bold"), text_color="#3b8ed0").pack(pady=(5,0))
+        ctk.CTkLabel(self.telemetry_box, text="NEURAL TELEMETRY", font=ctk.CTkFont(size=10, weight="bold"), text_color="#3b8ed0").pack(pady=(5,0))
+        
         self.lbl_cpu = ctk.CTkLabel(self.telemetry_box, text="CPU: ---", font=("Consolas", 11)); self.lbl_cpu.pack(pady=2)
+        self.lbl_swap = ctk.CTkLabel(self.telemetry_box, text="SWAP: ---", font=("Consolas", 11), text_color="#aaa"); self.lbl_swap.pack(pady=2)
         self.lbl_vram = ctk.CTkLabel(self.telemetry_box, text="VRAM: ---", font=("Consolas", 11)); self.lbl_vram.pack(pady=2)
         self.lbl_disk = ctk.CTkLabel(self.telemetry_box, text="DISK: ---", font=("Consolas", 11)); self.lbl_disk.pack(pady=2)
 
-        # Maintenance Tools
-        self.btn_purge = ctk.CTkButton(self.sidebar, text="SYSTEM PURGE", command=lambda: self.system_purge(), fg_color="#444", height=30, font=ctk.CTkFont(size=10))
-        self.btn_purge.pack(padx=20, pady=10, fill="x")
+        # Control Group
+        self.btn_purge = ctk.CTkButton(self.sidebar, text="PURGE ENGINE CACHE", command=lambda: self.system_purge(), fg_color="#333", height=35, font=ctk.CTkFont(size=11))
+        self.btn_purge.pack(padx=20, pady=15, fill="x")
 
-        self.btn_start = ctk.CTkButton(self.sidebar, text="IGNITION", command=lambda: self.start_studio(), fg_color="#2d5a27", hover_color="#1e3d1a", height=45, font=ctk.CTkFont(weight="bold"))
+        self.btn_start = ctk.CTkButton(self.sidebar, text="ENGINE IGNITION", command=lambda: self.start_studio(), fg_color="#2d5a27", hover_color="#1e3d1a", height=50, font=ctk.CTkFont(size=14, weight="bold"))
         self.btn_start.pack(padx=20, pady=10, fill="x")
-        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE", command=lambda: self.stop_studio(), fg_color="#8b0000", hover_color="#5a0000", height=45, font=ctk.CTkFont(weight="bold"))
+        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE CORE", command=lambda: self.stop_studio(), fg_color="#8b0000", hover_color="#5a0000", height=50, font=ctk.CTkFont(size=14, weight="bold"))
         self.btn_stop.pack(padx=20, pady=10, fill="x")
 
         # --- TABS ---
@@ -148,7 +150,7 @@ class App(ctk.CTk):
         self.check_status_loop()
         self.start_telemetry_loop()
 
-    # --- METADATA READER (GOD MODE) ---
+    # --- METADATA READER ---
     def get_lora_trigger(self, file_path):
         try:
             with open(file_path, "rb") as f:
@@ -156,10 +158,8 @@ class App(ctk.CTk):
                 header_json = f.read(header_size).decode("utf-8")
                 header = json.loads(header_json)
                 metadata = header.get("__metadata__", {})
-                # Tentar extrair tags ou trigger word
                 tags = metadata.get("ss_tag_frequency", "")
                 if tags:
-                    # Pegar as tags mais frequentes
                     tag_dict = json.loads(tags) if isinstance(tags, str) and tags.startswith("{") else {}
                     if tag_dict:
                         main_tags = list(tag_dict.keys())[0] if isinstance(tag_dict, dict) else ""
@@ -170,18 +170,18 @@ class App(ctk.CTk):
     def setup_optimizer_tab(self):
         f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
         f.pack(padx=40, pady=20, fill="both", expand=True)
-        ctk.CTkLabel(f, text="INTELLIGENT HARDWARE OPTIMIZER", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=15)
+        ctk.CTkLabel(f, text="INTELLIGENT HARDWARE OPTIMIZER", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=15)
         self.lbl_detected = ctk.CTkLabel(f, text="DETECTED GPU: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=5)
         self.lbl_vram_total = ctk.CTkLabel(f, text="TOTAL VRAM: ---", text_color="white", font=("Consolas", 12)); self.lbl_vram_total.pack(pady=5)
         
-        ctk.CTkLabel(f, text="Performance Profile:", text_color="gray").pack(pady=(10, 0))
-        self.profile_menu = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=350, height=40); self.profile_menu.pack(pady=5)
+        ctk.CTkLabel(f, text="Performance Profile:", text_color="gray").pack(pady=(15, 0))
+        self.profile_menu = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=400, height=45); self.profile_menu.pack(pady=5)
         
         ctk.CTkLabel(f, text="Expert Engine Flags (Manual Injection):", text_color="#FF8C00").pack(pady=(15, 0))
-        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Ex: --cuda-malloc --disable-smart-memory", height=40, width=400); self.entry_expert.pack(pady=5)
+        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Ex: --cuda-malloc --disable-smart-memory", height=45, width=450); self.entry_expert.pack(pady=5)
         self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
 
-        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=500); self.lbl_flags.pack(pady=20)
+        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=550); self.lbl_flags.pack(pady=25)
 
     def update_expert_flags(self):
         self.expert_flags = self.entry_expert.get().strip()
@@ -197,10 +197,8 @@ class App(ctk.CTk):
     def system_purge(self):
         if not messagebox.askyesno("Purge", "Deseja realizar a limpeza profunda do motor?\n(Logs e arquivos temporários)"): return
         try:
-            # Clean logs
             log = ENGINE_DIR / "comfyui_stealth.log"
             if log.exists(): log.write_text("")
-            # Clean ComfyUI temp
             temp = ENGINE_DIR / "temp"
             if temp.exists(): shutil.rmtree(temp); temp.mkdir()
             messagebox.showinfo("Success", "Sistema purificado e otimizado!")
@@ -237,15 +235,87 @@ class App(ctk.CTk):
         def update():
             while True:
                 try:
-                    if psutil: self.lbl_cpu.configure(text=f"CPU LOAD: {psutil.cpu_percent()}%")
-                    usage = psutil.disk_usage(str(MODELS_DIR))
-                    self.lbl_disk.configure(text=f"DISK FREE: {usage.free // (1024**3)} GB")
+                    if psutil:
+                        cpu = psutil.cpu_percent()
+                        swap = psutil.swap_memory().percent
+                        self.lbl_cpu.configure(text=f"CPU LOAD: {cpu}%")
+                        self.lbl_swap.configure(text=f"SWAP USED: {swap}%")
+                        usage = psutil.disk_usage(str(MODELS_DIR))
+                        self.lbl_disk.configure(text=f"DISK FREE: {usage.free // (1024**3)} GB")
                     if self.detected_vendor == "NVIDIA":
                         v = subprocess.check_output("nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits", shell=True, text=True, timeout=1).strip()
                         self.lbl_vram.configure(text=f"VRAM USED: {v} MB")
                 except: pass
                 time.sleep(3)
         threading.Thread(target=update, daemon=True).start()
+
+    def setup_acquisition_tab(self):
+        self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=lambda x: self.apply_preset(x), height=45); self.preset_menu.pack(padx=20, pady=20, fill="x")
+        self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI ID", height=45); self.entry_id.pack(padx=20, pady=10, fill="x")
+        self.option_type = ctk.CTkOptionMenu(self.tab_dl, values=["checkpoints", "loras", "vae", "controlnet"], height=45); self.option_type.pack(padx=20, pady=10, fill="x")
+        self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD TARGET", command=lambda: self.start_download(), height=55, font=ctk.CTkFont(weight="bold")); self.btn_dl.pack(padx=20, pady=10, fill="x")
+        self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505"); self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
+
+    def setup_inventory_tab(self):
+        self.inv_list = ctk.CTkTextbox(self.tab_inv, font=("Consolas", 12), fg_color="#050505"); self.inv_list.pack(padx=20, pady=20, fill="both", expand=True)
+        self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total Size: 0.00 GB", font=("Consolas", 12, "bold")); self.lbl_inv_total.pack(pady=5)
+        ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
+
+    def setup_training_tab(self):
+        f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=10, fill="x")
+        self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=35); self.train_base_model.pack(padx=20, pady=5, fill="x")
+        self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=35); self.train_lora_name.pack(padx=20, pady=5, fill="x")
+        self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=35); self.entry_trigger.pack(padx=20, pady=5, fill="x")
+        
+        # PRO TRAINING SUITE
+        f_params = ctk.CTkFrame(self.tab_train, fg_color="transparent"); f_params.pack(padx=20, pady=10, fill="x"); f_params.grid_columnconfigure((0,1,2,3), weight=1)
+        self.train_res = ctk.CTkEntry(f_params, placeholder_text="Res", height=35); self.train_res.grid(row=0, column=0, padx=5, sticky="ew"); self.train_res.insert(0, "512")
+        self.train_batch = ctk.CTkEntry(f_params, placeholder_text="Batch", height=35); self.train_batch.grid(row=0, column=1, padx=5, sticky="ew"); self.train_batch.insert(0, "1")
+        self.train_dim = ctk.CTkEntry(f_params, placeholder_text="Dim (Rank)", height=35); self.train_dim.grid(row=0, column=2, padx=5, sticky="ew"); self.train_dim.insert(0, "32")
+        self.train_alpha = ctk.CTkEntry(f_params, placeholder_text="Alpha", height=35); self.train_alpha.grid(row=0, column=3, padx=5, sticky="ew"); self.train_alpha.insert(0, "16")
+        
+        f_params2 = ctk.CTkFrame(self.tab_train, fg_color="transparent"); f_params2.pack(padx=20, pady=5, fill="x"); f_params2.grid_columnconfigure((0,1), weight=1)
+        self.train_steps = ctk.CTkEntry(f_params2, placeholder_text="Total Steps", height=35); self.train_steps.grid(row=0, column=0, padx=5, sticky="ew"); self.train_steps.insert(0, "1000")
+        self.train_lr = ctk.CTkEntry(f_params2, placeholder_text="Learning Rate", height=35); self.train_lr.grid(row=0, column=1, padx=5, sticky="ew"); self.train_lr.insert(0, "1e-4")
+
+        f_wizard = ctk.CTkFrame(self.tab_train, fg_color="transparent"); f_wizard.pack(pady=5)
+        self.chk_resize = ctk.CTkCheckBox(f_wizard, text="Auto-Resize (Stabilizer)", font=("Consolas", 11)); self.chk_resize.pack(side="left", padx=10); self.chk_resize.select()
+        ctk.CTkButton(f_wizard, text="DATASET WIZARD", command=lambda: self.dataset_wizard(), fg_color="#4B0082", height=40).pack(side="left", padx=10)
+        
+        self.btn_train = ctk.CTkButton(self.tab_train, text="START INDUSTRIAL TRAINING", command=lambda: self.start_training(), fg_color="#FF8C00", height=50, font=ctk.CTkFont(weight="bold")); self.btn_train.pack(padx=20, pady=10, fill="x")
+        self.log_train = ctk.CTkTextbox(self.tab_train, height=200, font=("Consolas", 11), fg_color="#050505"); self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
+
+    def setup_vault_tab(self):
+        f = ctk.CTkFrame(self.tab_vault, fg_color="transparent"); f.pack(padx=30, pady=30, fill="both", expand=True)
+        self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste API Key...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
+        ctk.CTkButton(f, text="SAVE TO VAULT", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
+        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
+
+    def load_config(self):
+        if CONFIG_FILE.exists():
+            try:
+                with open(CONFIG_FILE, 'r') as f:
+                    d = json.load(f); self.saved_apis = d.get("api_keys", [])
+                    self.active_profile = d.get("hw_profile", ""); self.active_ram_profile = d.get("ram_profile", "Balanced (Padrao)")
+                    self.expert_flags = d.get("expert_flags", "")
+                self.refresh_api_ui(); self.refresh_optimizer_ui()
+                if self.expert_flags: self.entry_expert.insert(0, self.expert_flags)
+            except: pass
+
+    def persist_config(self):
+        d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "ram_profile": self.active_ram_profile, "expert_flags": self.expert_flags}
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        temp_file = CONFIG_FILE.with_suffix(".tmp")
+        with open(temp_file, 'w') as f: json.dump(d, f, indent=4)
+        os.replace(temp_file, CONFIG_FILE)
+
+    def kill_port(self, port):
+        try:
+            if os.name != "nt":
+                subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True, timeout=2)
+                subprocess.run(f"lsof -ti:{port} | xargs kill -9", shell=True, capture_output=True, timeout=2)
+            else: subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True, timeout=2)
+        except: pass
 
     def start_studio(self):
         if self.process is None:
@@ -269,66 +339,6 @@ class App(ctk.CTk):
                     self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(BASE_DIR_PATH))
                 self.log_acquisition.insert("end", f"[V] Neural Engine Ignition: {self.active_profile}\n")
             except Exception as e: messagebox.showerror("Critical", str(e))
-
-    def setup_acquisition_tab(self):
-        self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=lambda x: self.apply_preset(x), height=45); self.preset_menu.pack(padx=20, pady=20, fill="x")
-        self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI ID", height=45); self.entry_id.pack(padx=20, pady=10, fill="x")
-        self.option_type = ctk.CTkOptionMenu(self.tab_dl, values=["checkpoints", "loras", "vae", "controlnet"], height=45); self.option_type.pack(padx=20, pady=10, fill="x")
-        self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD", command=lambda: self.start_download(), height=50); self.btn_dl.pack(padx=20, pady=10, fill="x")
-        self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505"); self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
-
-    def setup_inventory_tab(self):
-        self.inv_list = ctk.CTkTextbox(self.tab_inv, font=("Consolas", 12), fg_color="#050505"); self.inv_list.pack(padx=20, pady=20, fill="both", expand=True)
-        self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total Size: 0.00 GB", font=("Consolas", 12, "bold")); self.lbl_inv_total.pack(pady=5)
-        ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
-
-    def setup_training_tab(self):
-        f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=10, fill="x")
-        self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=35); self.train_base_model.pack(padx=20, pady=5, fill="x")
-        self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=35); self.train_lora_name.pack(padx=20, pady=5, fill="x")
-        self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=35); self.entry_trigger.pack(padx=20, pady=5, fill="x")
-        f_params = ctk.CTkFrame(self.tab_train, fg_color="transparent"); f_params.pack(padx=20, pady=10, fill="x"); f_params.grid_columnconfigure((0,1,2,3), weight=1)
-        self.train_res = ctk.CTkEntry(f_params, placeholder_text="Res", height=35); self.train_res.grid(row=0, column=0, padx=5, sticky="ew"); self.train_res.insert(0, "512")
-        self.train_batch = ctk.CTkEntry(f_params, placeholder_text="Batch", height=35); self.train_batch.grid(row=0, column=1, padx=5, sticky="ew"); self.train_batch.insert(0, "1")
-        self.train_steps = ctk.CTkEntry(f_params, placeholder_text="Steps", height=35); self.train_steps.grid(row=0, column=2, padx=5, sticky="ew"); self.train_steps.insert(0, "1000")
-        self.train_lr = ctk.CTkEntry(f_params, placeholder_text="LR", height=35); self.train_lr.grid(row=0, column=3, padx=5, sticky="ew"); self.train_lr.insert(0, "1e-4")
-        f_wizard = ctk.CTkFrame(self.tab_train, fg_color="transparent"); f_wizard.pack(pady=5)
-        self.chk_resize = ctk.CTkCheckBox(f_wizard, text="Auto-Resize (Stabilizer)", font=("Consolas", 11)); self.chk_resize.pack(side="left", padx=10); self.chk_resize.select()
-        ctk.CTkButton(f_wizard, text="DATASET WIZARD", command=lambda: self.dataset_wizard(), fg_color="#4B0082", height=40).pack(side="left", padx=10)
-        self.btn_train = ctk.CTkButton(self.tab_train, text="START INDUSTRIAL TRAINING", command=lambda: self.start_training(), fg_color="#FF8C00", height=45, font=ctk.CTkFont(weight="bold")); self.btn_train.pack(padx=20, pady=10, fill="x")
-        self.log_train = ctk.CTkTextbox(self.tab_train, height=250, font=("Consolas", 11), fg_color="#050505"); self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
-
-    def setup_vault_tab(self):
-        f = ctk.CTkFrame(self.tab_vault, fg_color="transparent"); f.pack(padx=30, pady=30, fill="both", expand=True)
-        self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste API Key...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
-        ctk.CTkButton(f, text="SAVE TO VAULT", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
-        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
-
-    def load_config(self):
-        if CONFIG_FILE.exists():
-            try:
-                with open(CONFIG_FILE, 'r') as f:
-                    d = json.load(f); self.saved_apis = d.get("api_keys", [])
-                    self.active_profile = d.get("hw_profile", ""); self.active_ram_profile = d.get("ram_profile", "Balanced (Padrao)")
-                    self.expert_flags = d.get("expert_flags", "")
-                self.refresh_api_ui(); self.refresh_optimizer_ui()
-                self.entry_expert.insert(0, self.expert_flags)
-            except: pass
-
-    def persist_config(self):
-        d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "ram_profile": self.active_ram_profile, "expert_flags": self.expert_flags}
-        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        temp_file = CONFIG_FILE.with_suffix(".tmp")
-        with open(temp_file, 'w') as f: json.dump(d, f, indent=4)
-        os.replace(temp_file, CONFIG_FILE)
-
-    def kill_port(self, port):
-        try:
-            if os.name != "nt":
-                subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True, timeout=2)
-                subprocess.run(f"lsof -ti:{port} | xargs kill -9", shell=True, capture_output=True, timeout=2)
-            else: subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True, timeout=2)
-        except: pass
 
     def stop_studio(self):
         self.kill_port(8188)
@@ -391,13 +401,8 @@ class App(ctk.CTk):
                         path = Path(root) / f
                         f_size = os.path.getsize(path) / (1024**3)
                         total_size += f_size
-                        
-                        trigger = ""
-                        if "loras" in str(path).lower():
-                            trigger = self.get_lora_trigger(str(path))
-                        
+                        trigger = self.get_lora_trigger(str(path)) if "loras" in str(path).lower() else ""
                         item = f"● {f} ({f_size:.2f} GB) {trigger}"
-                        
                         found = False
                         for cat in categories.keys():
                             if cat in str(path).lower(): categories[cat].append(item); found = True; break
@@ -431,15 +436,31 @@ class App(ctk.CTk):
 
     def start_training(self):
         m = self.train_base_model.get().strip(); n = self.train_lora_name.get().strip(); t = self.entry_trigger.get().strip()
-        res = self.train_res.get().strip(); batch = self.train_batch.get().strip(); steps = self.train_steps.get().strip(); lr = self.train_lr.get().strip()
-        if not all([m, n, t, res, batch, steps, lr]): messagebox.showwarning("Erro", "Preencha tudo!"); return
-        threading.Thread(target=self.run_train, args=(m, n, t, res, batch, steps, lr), daemon=True).start()
+        res = self.train_res.get().strip(); batch = self.train_batch.get().strip()
+        dim = self.train_dim.get().strip(); alpha = self.train_alpha.get().strip()
+        steps = self.train_steps.get().strip(); lr = self.train_lr.get().strip()
+        if not all([m, n, t, res, batch, dim, alpha, steps, lr]): messagebox.showwarning("Erro", "Preencha tudo!"); return
+        threading.Thread(target=self.run_train, args=(m, n, t, res, batch, dim, alpha, steps, lr), daemon=True).start()
 
-    def run_train(self, m, n, t, res, batch, steps, lr):
+    def run_train(self, m, n, t, res, batch, dim, alpha, steps, lr):
         self.log_train.insert("end", f"[{time.strftime('%H:%M:%S')}] STARTING INDUSTRIAL TRAINING...\n")
         py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
         script = get_short_path(TOOLS_DIR / "sd-scripts" / "train_network.py")
-        cmd = [str(py), str(script), "--pretrained_model_name_or_path", m, "--train_data_dir", str(BASE_DIR_PATH / "workspace/training_data" / t / "img"), "--output_dir", str(MODELS_DIR / "loras"), "--output_name", n, "--resolution", f"{res},{res}", "--train_batch_size", batch, "--max_train_steps", steps, "--learning_rate", lr, "--network_module", "networks.lora", "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"]
+        cmd = [
+            str(py), str(script), 
+            "--pretrained_model_name_or_path", m, 
+            "--train_data_dir", str(BASE_DIR_PATH / "workspace/training_data" / t / "img"), 
+            "--output_dir", str(MODELS_DIR / "loras"), 
+            "--output_name", n, 
+            "--resolution", f"{res},{res}", 
+            "--train_batch_size", batch, 
+            "--network_dim", dim,
+            "--network_alpha", alpha,
+            "--max_train_steps", steps, 
+            "--learning_rate", lr, 
+            "--network_module", "networks.lora", 
+            "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"
+        ]
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         for line in proc.stdout: self.log_train.insert("end", line); self.log_train.see("end")
         proc.wait()
