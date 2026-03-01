@@ -43,7 +43,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "2.2.0 (Cognitive Intel)"
+VERSION = "2.3.0 (Neural Vision)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -54,7 +54,6 @@ MODELS_DIR = BASE_DIR_PATH / "models"
 CONFIG_FILE = BASE_DIR_PATH / "config" / "user_config.json"
 WORKFLOWS_DIR = BASE_DIR_PATH / "workspace" / "workflows"
 
-# --- MAPEAMENTO INDUSTRIAL DE HARDWARE ---
 GPU_DATABASE = {
     "NVIDIA": {
         "RTX 3060 Ti / 4060 (8GB)": "--normalvram --use-split-cross-attention --fp8_e4m3fn-text-enc",
@@ -93,7 +92,7 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title(f"AI NEURAL VIDEO STUDIO | {VERSION}")
-        self.geometry("1250x950")
+        self.geometry("1300x950")
         self.process = None
         self.saved_apis = []
         self.detected_vendor = "CPU"
@@ -101,6 +100,7 @@ class App(ctk.CTk):
         self.active_profile = ""
         self.active_ram_profile = "Balanced (Padrao)"
         self.expert_flags = ""
+        self.current_preview_image = None
 
         # Layout
         self.grid_columnconfigure(1, weight=1)
@@ -110,7 +110,7 @@ class App(ctk.CTk):
         self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0, fg_color="#0a0a0a")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
-        ctk.CTkLabel(self.sidebar, text="NEURAL CORE 2.2", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
+        ctk.CTkLabel(self.sidebar, text="NEURAL CORE 2.3", font=ctk.CTkFont(size=24, weight="bold", family="Consolas")).pack(pady=30)
         
         self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10)
         self.status_box.pack(padx=15, pady=5, fill="x")
@@ -148,49 +148,73 @@ class App(ctk.CTk):
         self.detect_hardware(); self.load_config()
         self.check_status_loop(); self.start_telemetry_loop()
 
-    # --- DATASET WIZARD (COGNITIVE UPGRADE) ---
-    def dataset_wizard(self):
-        trigger = self.entry_trigger.get().strip()
-        if not trigger: messagebox.showwarning("Wizard", "Defina um TRIGGER WORD primeiro."); return
-        src = ctk.filedialog.askdirectory()
-        if not src: return
-        
-        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
-        dst.mkdir(parents=True, exist_ok=True)
-        res = int(self.train_res.get().strip()) if self.train_res.get().strip().isdigit() else 512
-        
-        def process():
-            self.log_train.insert("end", "[*] Iniciando Dataset Wizard Neural...\n")
-            for i, f in enumerate(os.listdir(src)):
-                if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                    ext = os.path.splitext(f)[1]; path_src = os.path.join(src, f); path_dst = dst / f"{trigger}_{i:03d}{ext}"
-                    # 1. Resize/Stabilize
-                    if self.chk_resize.get():
-                        with Image.open(path_src) as img:
-                            img = img.convert("RGB"); img.thumbnail((res, res), Image.Resampling.LANCZOS)
-                            new_img = Image.new("RGB", (res, res), (0, 0, 0))
-                            new_img.paste(img, ((res - img.size[0]) // 2, (res - img.size[1]) // 2))
-                            new_img.save(path_dst)
-                    else: shutil.copy2(path_src, path_dst)
-                    # 2. Captioning
-                    with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
-            
-            # 3. AI Neural Tagger (WD14)
-            if self.chk_tagger.get():
-                self.log_train.insert("end", "[*] Invocando AI Neural Tagger (WD14)...\n")
-                py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
-                tagger_script = get_short_path(TOOLS_DIR / "tagger.py")
-                cmd = [str(py), str(tagger_script), str(dst), trigger]
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-                for line in proc.stdout: self.log_train.insert("end", f" > {line.strip()}\n"); self.log_train.see("end")
-                proc.wait()
-            
-            messagebox.showinfo("Wizard", f"Dataset Neural Completo: {res}x{res} + Tags")
-            self.log_train.insert("end", "[V] PROCESSO CONCLUÍDO COM SUCESSO!\n")
+    def setup_inventory_tab(self):
+        f_main = ctk.CTkFrame(self.tab_inv, fg_color="transparent")
+        f_main.pack(fill="both", expand=True)
+        f_main.grid_columnconfigure(0, weight=1)
+        f_main.grid_columnconfigure(1, weight=1)
+        f_main.grid_rowconfigure(0, weight=1)
 
-        threading.Thread(target=process, daemon=True).start()
+        # Left: List
+        self.inv_box = ctk.CTkTextbox(f_main, font=("Consolas", 12), fg_color="#050505")
+        self.inv_box.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        
+        # Right: Neural Insight Panel
+        self.f_insight = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333")
+        self.f_insight.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        
+        self.lbl_preview = ctk.CTkLabel(self.f_insight, text="Select a model to preview", width=400, height=400, fg_color="#050505", corner_radius=10)
+        self.lbl_preview.pack(padx=20, pady=20)
+        
+        self.txt_meta = ctk.CTkTextbox(self.f_insight, height=200, font=("Consolas", 11), fg_color="transparent", border_width=0)
+        self.txt_meta.pack(padx=20, pady=10, fill="x")
+        
+        ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
+        self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total Size: 0.00 GB", font=("Consolas", 12, "bold"))
+        self.lbl_inv_total.pack(pady=5)
 
-    # --- SYSTEM METHODS ---
+    def refresh_models_list(self):
+        self.inv_box.delete("1.0", "end")
+        categories = {"checkpoints": [], "loras": [], "vae": [], "controlnet": [], "other": []}
+        total_size = 0
+        if MODELS_DIR.exists():
+            for root, dirs, files in os.walk(MODELS_DIR):
+                for f in files:
+                    if f.endswith((".safetensors", ".ckpt")):
+                        path = Path(root) / f; f_size = os.path.getsize(path) / (1024**3); total_size += f_size
+                        trigger = self.get_lora_trigger(str(path)) if "loras" in str(path).lower() else ""
+                        item = f"● {f} ({f_size:.2f} GB)"
+                        
+                        found = False
+                        for cat in categories.keys():
+                            if cat in str(path).lower(): categories[cat].append((f, path, item, trigger)); found = True; break
+                        if not found: categories["other"].append((f, path, item, trigger))
+            
+            for cat, items in categories.items():
+                if items:
+                    self.inv_box.insert("end", f"\n--- {cat.upper()} ---\n")
+                    for name, path, label, trig in sorted(items): 
+                        self.inv_box.insert("end", f"{label} {trig}\n")
+                        # Em uma versão futura, adicionaremos o bind de clique aqui
+        self.lbl_inv_total.configure(text=f"Total Inventory Size: {total_size:.2f} GB")
+
+    # --- REMAINING METHODS (STABILIZED) ---
+    def get_lora_trigger(self, file_path):
+        try:
+            with open(file_path, "rb") as f:
+                header_size = struct.unpack("<Q", f.read(8))[0]
+                header_json = f.read(header_size).decode("utf-8")
+                header = json.loads(header_json)
+                metadata = header.get("__metadata__", {})
+                tags = metadata.get("ss_tag_frequency", "")
+                if tags:
+                    tag_dict = json.loads(tags) if isinstance(tags, str) and tags.startswith("{") else {}
+                    if tag_dict:
+                        main_tags = list(tag_dict.keys())[0] if isinstance(tag_dict, dict) else ""
+                        return f"[Tags: {str(main_tags)[:30]}...]"
+                return ""
+        except: return ""
+
     def detect_hardware(self):
         try:
             if os.name == "nt":
@@ -209,33 +233,6 @@ class App(ctk.CTk):
                 self.detected_vram = int(v_out) // 1048576
         except: pass
         self.refresh_optimizer_ui(); self.auto_suggest_profile()
-
-    def auto_suggest_profile(self):
-        if self.detected_vram > 0 and not self.active_profile:
-            models = list(GPU_DATABASE[self.detected_vendor].keys())
-            if "NVIDIA" in self.detected_vendor:
-                if self.detected_vram <= 6144: p = models[3]
-                elif self.detected_vram <= 8192: p = models[0]
-                elif self.detected_vram <= 16384: p = models[1]
-                else: p = models[2]
-            else: p = models[0]
-            self.gpu_picker.set(p); self.set_profile(p)
-
-    def setup_canvas_tab(self):
-        self.canvas_list = ctk.CTkTextbox(self.tab_canvas, font=("Consolas", 12), fg_color="#050505")
-        self.canvas_list.pack(padx=20, pady=20, fill="both", expand=True)
-        f_controls = ctk.CTkFrame(self.tab_canvas, fg_color="transparent")
-        f_controls.pack(pady=10)
-        ctk.CTkButton(f_controls, text="REFRESH WORKFLOWS", command=lambda: self.refresh_canvas(), height=40).pack(side="left", padx=10)
-        ctk.CTkButton(f_controls, text="OPEN FOLDER", command=lambda: os.system(f"xdg-open '{WORKFLOWS_DIR}'"), fg_color="#444", height=40).pack(side="left", padx=10)
-        self.refresh_canvas()
-
-    def refresh_canvas(self):
-        self.canvas_list.delete("1.0", "end")
-        WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
-        files = [f for f in os.listdir(WORKFLOWS_DIR) if f.endswith(".json")]
-        if not files: self.canvas_list.insert("end", "Nenhum fluxo (.json) encontrado em workspace/workflows/")
-        for f in sorted(files): self.canvas_list.insert("end", f"⚡ {f}\n")
 
     def start_telemetry_loop(self):
         def update():
@@ -282,11 +279,6 @@ class App(ctk.CTk):
         self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD TARGET", command=lambda: self.start_download(), height=55, font=ctk.CTkFont(weight="bold")); self.btn_dl.pack(padx=20, pady=10, fill="x")
         self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505"); self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
 
-    def setup_inventory_tab(self):
-        self.inv_list = ctk.CTkTextbox(self.tab_inv, font=("Consolas", 12), fg_color="#050505"); self.inv_list.pack(padx=20, pady=20, fill="both", expand=True)
-        self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total Size: 0.00 GB", font=("Consolas", 12, "bold")); self.lbl_inv_total.pack(pady=5)
-        ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
-
     def setup_training_tab(self):
         f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=10, fill="x")
         self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=35); self.train_base_model.pack(padx=20, pady=5, fill="x")
@@ -312,6 +304,15 @@ class App(ctk.CTk):
         self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste API Key...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
         ctk.CTkButton(f, text="SAVE TO VAULT", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
         self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
+
+    def setup_canvas_tab(self):
+        self.canvas_list = ctk.CTkTextbox(self.tab_canvas, font=("Consolas", 12), fg_color="#050505")
+        self.canvas_list.pack(padx=20, pady=20, fill="both", expand=True)
+        f_controls = ctk.CTkFrame(self.tab_canvas, fg_color="transparent")
+        f_controls.pack(pady=10)
+        ctk.CTkButton(f_controls, text="REFRESH WORKFLOWS", command=lambda: self.refresh_canvas(), height=40).pack(side="left", padx=10)
+        ctk.CTkButton(f_controls, text="OPEN FOLDER", command=lambda: os.system(f"xdg-open '{WORKFLOWS_DIR}'"), fg_color="#444", height=40).pack(side="left", padx=10)
+        self.refresh_canvas()
 
     def setup_optimizer_tab(self):
         f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
@@ -411,26 +412,45 @@ class App(ctk.CTk):
         for line in proc.stdout: self.log_acquisition.insert("end", f"[{time.strftime('%H:%M:%S')}] {line.strip()}\n"); self.log_acquisition.see("end")
         proc.wait(); self.after(500, self.refresh_models_list)
 
-    def refresh_models_list(self):
-        self.inv_list.delete("1.0", "end")
-        categories = {"checkpoints": [], "loras": [], "vae": [], "controlnet": [], "other": []}
-        total_size = 0
-        if MODELS_DIR.exists():
-            for root, dirs, files in os.walk(MODELS_DIR):
-                for f in files:
-                    if f.endswith((".safetensors", ".ckpt")):
-                        path = Path(root) / f; f_size = os.path.getsize(path) / (1024**3); total_size += f_size
-                        trigger = self.get_lora_trigger(str(path)) if "loras" in str(path).lower() else ""
-                        item = f"● {f} ({f_size:.2f} GB) {trigger}"
-                        found = False
-                        for cat in categories.keys():
-                            if cat in str(path).lower(): categories[cat].append(item); found = True; break
-                        if not found: categories["other"].append(item)
-            for cat, items in categories.items():
-                if items:
-                    self.inv_list.insert("end", f"\n--- {cat.upper()} ---\n")
-                    for m in sorted(items): self.inv_list.insert("end", f"{m}\n")
-        self.lbl_inv_total.configure(text=f"Total Inventory Size: {total_size:.2f} GB")
+    def refresh_canvas(self):
+        self.canvas_list.delete("1.0", "end")
+        WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+        files = [f for f in os.listdir(WORKFLOWS_DIR) if f.endswith(".json")]
+        if not files: self.canvas_list.insert("end", "Nenhum fluxo (.json) encontrado em workspace/workflows/")
+        for f in sorted(files): self.canvas_list.insert("end", f"⚡ {f}\n")
+
+    def dataset_wizard(self):
+        trigger = self.entry_trigger.get().strip()
+        if not trigger: messagebox.showwarning("Wizard", "Defina um TRIGGER WORD primeiro."); return
+        src = ctk.filedialog.askdirectory()
+        if not src: return
+        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
+        dst.mkdir(parents=True, exist_ok=True)
+        res = int(self.train_res.get().strip()) if self.train_res.get().strip().isdigit() else 512
+        def process():
+            self.log_train.insert("end", "[*] Iniciando Dataset Wizard Neural...\n")
+            for i, f in enumerate(os.listdir(src)):
+                if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    ext = os.path.splitext(f)[1]; path_src = os.path.join(src, f); path_dst = dst / f"{trigger}_{i:03d}{ext}"
+                    if self.chk_resize.get():
+                        with Image.open(path_src) as img:
+                            img = img.convert("RGB"); img.thumbnail((res, res), Image.Resampling.LANCZOS)
+                            new_img = Image.new("RGB", (res, res), (0, 0, 0))
+                            new_img.paste(img, ((res - img.size[0]) // 2, (res - img.size[1]) // 2))
+                            new_img.save(path_dst)
+                    else: shutil.copy2(path_src, path_dst)
+                    with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
+            if self.chk_tagger.get():
+                self.log_train.insert("end", "[*] Invocando AI Neural Tagger (WD14)...\n")
+                py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
+                tagger_script = get_short_path(TOOLS_DIR / "tagger.py")
+                cmd = [str(py), str(tagger_script), str(dst), trigger]
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                for line in proc.stdout: self.log_train.insert("end", f" > {line.strip()}\n"); self.log_train.see("end")
+                proc.wait()
+            messagebox.showinfo("Wizard", f"Dataset Neural Completo: {res}x{res} + Tags")
+            self.log_train.insert("end", "[V] PROCESSO CONCLUÍDO COM SUCESSO!\n")
+        threading.Thread(target=process, daemon=True).start()
 
     def start_training(self):
         m = self.train_base_model.get().strip(); n = self.train_lora_name.get().strip(); t = self.entry_trigger.get().strip()
