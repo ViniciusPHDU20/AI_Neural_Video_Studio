@@ -41,7 +41,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "1.6.9 (Downloader Modernization)"
+VERSION = "1.7.0 (Industrial Intelligence)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -122,10 +122,14 @@ class App(ctk.CTk):
         # --- TABS ---
         self.tabs = ctk.CTkTabview(self, segmented_button_fg_color="#0d0d0d", segmented_button_selected_color="#3b8ed0")
         self.tabs.grid(row=0, column=1, padx=20, pady=10, sticky="nsew")
-        self.tab_dl = self.tabs.add("📦 ACQUISITION"); self.tab_train = self.tabs.add("🧠 TRAINING")
-        self.tab_opt = self.tabs.add("🚀 OPTIMIZER"); self.tab_vault = self.tabs.add("⚙️ VAULT")
+        self.tab_dl = self.tabs.add("📦 ACQUISITION")
+        self.tab_inv = self.tabs.add("📂 INVENTORY")
+        self.tab_train = self.tabs.add("🧠 TRAINING")
+        self.tab_opt = self.tabs.add("🚀 OPTIMIZER")
+        self.tab_vault = self.tabs.add("⚙️ VAULT")
 
         self.setup_acquisition_tab()
+        self.setup_inventory_tab()
         self.setup_training_tab()
         self.setup_optimizer_tab()
         self.setup_vault_tab()
@@ -139,16 +143,21 @@ class App(ctk.CTk):
         self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=lambda x: self.apply_preset(x), height=45)
         self.preset_menu.pack(padx=20, pady=20, fill="x")
         self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI ID", height=45); self.entry_id.pack(padx=20, pady=10, fill="x")
-        self.option_type = ctk.CTkOptionMenu(self.tab_dl, values=["checkpoints", "loras", "vae"], height=45); self.option_type.pack(padx=20, pady=10, fill="x")
+        self.option_type = ctk.CTkOptionMenu(self.tab_dl, values=["checkpoints", "loras", "vae", "controlnet"], height=45); self.option_type.pack(padx=20, pady=10, fill="x")
         self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD", command=lambda: self.start_download(), height=50); self.btn_dl.pack(padx=20, pady=10, fill="x")
         self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=350, font=("Consolas", 12), fg_color="#050505"); self.log_acquisition.pack(padx=20, pady=20, fill="both", expand=True)
+
+    def setup_inventory_tab(self):
+        self.inv_list = ctk.CTkTextbox(self.tab_inv, font=("Consolas", 12), fg_color="#050505")
+        self.inv_list.pack(padx=20, pady=20, fill="both", expand=True)
+        ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
 
     def setup_training_tab(self):
         f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=20, fill="x")
         self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=40); self.train_base_model.pack(padx=20, pady=10, fill="x")
         self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=40); self.train_lora_name.pack(padx=20, pady=10, fill="x")
         self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=40); self.entry_trigger.pack(padx=20, pady=10, fill="x")
-        ctk.CTkButton(f, text="WIZARD", command=lambda: self.dataset_wizard(), fg_color="#4B0082").pack(pady=5)
+        ctk.CTkButton(f, text="DATASET WIZARD", command=lambda: self.dataset_wizard(), fg_color="#4B0082", height=40).pack(pady=5)
         self.btn_train = ctk.CTkButton(self.tab_train, text="START TRAINING", command=lambda: self.start_training(), fg_color="#FF8C00", height=45); self.btn_train.pack(padx=20, pady=10, fill="x")
         self.log_train = ctk.CTkTextbox(self.tab_train, height=250, font=("Consolas", 11), fg_color="#050505"); self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
 
@@ -164,8 +173,8 @@ class App(ctk.CTk):
     def setup_vault_tab(self):
         f = ctk.CTkFrame(self.tab_vault, fg_color="transparent"); f.pack(padx=30, pady=30, fill="both", expand=True)
         self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste API Key...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
-        ctk.CTkButton(f, text="SAVE", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
-        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
+        ctk.CTkButton(f, text="SAVE TO VAULT", command=lambda: self.save_api_key(), height=45).pack(fill="x", pady=10)
+        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED KEYS", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
 
     # --- LOGIC ---
 
@@ -203,7 +212,7 @@ class App(ctk.CTk):
         for key in self.saved_apis:
             f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
             ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
-            ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
+            ctk.CTkButton(f, text="REVOKE", width=70, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
 
     def remove_api_key(self, key):
         if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
@@ -221,10 +230,8 @@ class App(ctk.CTk):
     def persist_config(self):
         d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "ram_profile": self.active_ram_profile}
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        # Escrita atômica para evitar perda de dados
         temp_file = CONFIG_FILE.with_suffix(".tmp")
-        with open(temp_file, 'w') as f:
-            json.dump(d, f, indent=4)
+        with open(temp_file, 'w') as f: json.dump(d, f, indent=4)
         os.replace(temp_file, CONFIG_FILE)
 
     def kill_port(self, port):
@@ -308,12 +315,16 @@ class App(ctk.CTk):
 
     def refresh_models_list(self):
         self.inv_list.delete("1.0", "end")
-        u = set()
+        u = []
         if MODELS_DIR.exists():
             for root, dirs, files in os.walk(MODELS_DIR):
                 for f in files:
-                    if f.endswith((".safetensors", ".ckpt")): u.add(f)
-            for m in sorted(list(u)): self.inv_list.insert("end", f"● {m}\n")
+                    if f.endswith((".safetensors", ".ckpt")):
+                        path = Path(root) / f
+                        size = os.path.getsize(path) / (1024*1024*1024)
+                        u.append(f"● {f} ({size:.2f} GB)")
+            for m in sorted(u): self.inv_list.insert("end", f"{m}\n")
+        if not u: self.inv_list.insert("end", "Inventory Empty.")
 
     def dataset_wizard(self):
         trigger = self.entry_trigger.get().strip()
