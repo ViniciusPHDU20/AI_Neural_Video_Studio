@@ -4,7 +4,7 @@
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
-echo "[*] Abrindo Command Center V2.4.0..."
+echo "[*] Abrindo Command Center V2.5.0..."
 
 if [ ! -f ".venv/bin/python3" ]; then
     echo "[!] Ambiente virtual não encontrado!"
