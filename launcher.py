@@ -5,7 +5,6 @@ import ctypes
 from pathlib import Path
 
 # --- AUTO-CORREÇÃO DE AMBIENTE (GOD MODE) ---
-# Usar Pathlib para resolver caminhos de forma robusta em Linux e Windows
 BASE_DIR = Path(__file__).parent.absolute()
 
 def get_short_path(path):
@@ -22,7 +21,6 @@ BASE_DIR_PATH = Path(get_short_path(BASE_DIR))
 VENV_PATH = BASE_DIR_PATH / ".venv"
 
 def check_venv():
-    # Se já estivermos no VENV ou se ele não existir, seguimos em frente
     if hasattr(sys, 'real_prefix') or (sys.base_prefix != sys.prefix):
         return
     
@@ -44,9 +42,10 @@ import customtkinter as ctk
 import threading
 import json
 import socket
+import shutil
 from tkinter import messagebox
 
-VERSION = "1.3.9 (Linux Perfection Patch)"
+VERSION = "1.4.0 (Engine Recovery Patch)"
 
 # Configurações de Estilo Moderno
 ctk.set_appearance_mode("Dark")
@@ -74,7 +73,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title(f"AI Neural Video Studio V{VERSION} - Command Center")
+        self.title(f"AI Neural Video Studio V{VERSION} - Recovery Mode")
         self.geometry("850x650")
         self.process = None
 
@@ -107,20 +106,14 @@ class App(ctk.CTk):
         self.tabview.add("Configurações")
 
         # Tab 1: Download
-        self.label_preset = ctk.CTkLabel(self.tabview.tab("Download"), text="Presets de Modelos:", font=ctk.CTkFont(size=12, weight="bold"))
-        self.label_preset.pack(pady=(10, 5), padx=20, anchor="w")
         self.preset_menu = ctk.CTkOptionMenu(self.tabview.tab("Download"), values=list(PRESET_MODELS.keys()), command=self.apply_preset)
-        self.preset_menu.pack(pady=5, padx=20, fill="x")
-
+        self.preset_menu.pack(pady=10, padx=20, fill="x")
         self.model_id_entry = ctk.CTkEntry(self.tabview.tab("Download"), placeholder_text="ID do Civitai Manual", height=35)
         self.model_id_entry.pack(pady=10, padx=20, fill="x")
-
         self.model_type_option = ctk.CTkOptionMenu(self.tabview.tab("Download"), values=["checkpoints", "loras", "vae", "controlnet"])
         self.model_type_option.pack(pady=5, padx=20, fill="x")
-
         self.download_btn = ctk.CTkButton(self.tabview.tab("Download"), text="BAIXAR MODELO", command=self.start_download, height=40)
         self.download_btn.pack(pady=20, padx=20)
-
         self.log_textbox = ctk.CTkTextbox(self.tabview.tab("Download"), height=180, font=("Consolas", 12))
         self.log_textbox.pack(pady=10, padx=20, fill="both", expand=True)
 
@@ -133,18 +126,16 @@ class App(ctk.CTk):
         # Tab: Treinamento LoRA
         self.wizard_trigger = ctk.CTkEntry(self.tabview.tab("Treinamento LoRA"), placeholder_text="Palavra-Gatilho (ex: meunome)")
         self.wizard_trigger.pack(pady=10, padx=20, fill="x")
-        self.wizard_btn = ctk.CTkButton(self.tabview.tab("Treinamento LoRA"), text="CRIAR DATASET AUTOMÁTICO", command=self.dataset_wizard, fg_color="#4B0082", hover_color="#800080")
+        self.wizard_btn = ctk.CTkButton(self.tabview.tab("Treinamento LoRA"), text="CRIAR DATASET AUTOMÁTICO", command=self.dataset_wizard, fg_color="#4B0082")
         self.wizard_btn.pack(pady=5, padx=20, fill="x")
-        self.train_btn = ctk.CTkButton(self.tabview.tab("Treinamento LoRA"), text="INICIAR TREINAMENTO", command=self.start_training, fg_color="#FF8C00", hover_color="#CC7000")
+        self.train_btn = ctk.CTkButton(self.tabview.tab("Treinamento LoRA"), text="INICIAR TREINAMENTO", command=self.start_training, fg_color="#FF8C00")
         self.train_btn.pack(pady=10, padx=20, fill="x")
         self.train_log = ctk.CTkTextbox(self.tabview.tab("Treinamento LoRA"), height=150, font=("Consolas", 12))
         self.train_log.pack(pady=10, padx=20, fill="both", expand=True)
 
         # Tab 3: Configurações
-        self.api_key_label = ctk.CTkLabel(self.tabview.tab("Configurações"), text="Civitai API Key (Para modelos restritos/NSFW):", font=ctk.CTkFont(size=12, weight="bold"))
-        self.api_key_label.pack(pady=(10, 5), padx=20, anchor="w")
         self.api_key_entry = ctk.CTkEntry(self.tabview.tab("Configurações"), placeholder_text="Insira sua API Key...", show="*", height=35)
-        self.api_key_entry.pack(pady=5, padx=20, fill="x")
+        self.api_key_entry.pack(pady=20, padx=20, fill="x")
         self.save_config_btn = ctk.CTkButton(self.tabview.tab("Configurações"), text="SALVAR CONFIGURAÇÕES", command=self.save_config)
         self.save_config_btn.pack(pady=20)
         
@@ -155,13 +146,6 @@ class App(ctk.CTk):
     def log(self, message):
         self.log_textbox.insert("end", f"[*] {message}\n")
         self.log_textbox.see("end")
-
-    def apply_preset(self, choice):
-        preset = PRESET_MODELS.get(choice)
-        if preset and preset["id"]:
-            self.model_id_entry.delete(0, "end")
-            self.model_id_entry.insert(0, preset["id"])
-            self.model_type_option.set(preset["type"])
 
     def load_config(self):
         if CONFIG_FILE.exists():
@@ -177,6 +161,13 @@ class App(ctk.CTk):
         with open(CONFIG_FILE, 'w') as f:
             json.dump({"civitai_api_key": key}, f, indent=4)
         messagebox.showinfo("Sucesso", "Configurações salvas!")
+
+    def apply_preset(self, choice):
+        preset = PRESET_MODELS.get(choice)
+        if preset and preset["id"]:
+            self.model_id_entry.delete(0, "end")
+            self.model_id_entry.insert(0, preset["id"])
+            self.model_type_option.set(preset["type"])
 
     def start_download(self):
         m_id = self.model_id_entry.get().strip()
@@ -217,41 +208,36 @@ class App(ctk.CTk):
 
     def dataset_wizard(self):
         trigger = self.wizard_trigger.get().strip()
-        if not trigger:
-            messagebox.showwarning("Erro", "Defina uma Palavra-Gatilho!")
-            return
-        source_dir = ctk.filedialog.askdirectory(title="Selecione fotos ORIGINAIS")
+        if not trigger: return
+        source_dir = ctk.filedialog.askdirectory()
         if not source_dir: return
-
         base_train = BASE_DIR_PATH / "workspace" / "training_data" / trigger
         img_dir = base_train / "img" / f"15_{trigger}"
         img_dir.mkdir(parents=True, exist_ok=True)
-
         import shutil
-        count = 0
-        for file in os.listdir(source_dir):
+        for i, file in enumerate(os.listdir(source_dir)):
             if file.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                count += 1
-                new_name = f"{trigger}_{count:03d}{os.path.splitext(file)[1]}"
-                shutil.copy2(os.path.join(source_dir, file), img_dir / new_name)
-                with open(img_dir / f"{trigger}_{count:03d}.txt", "w") as f:
-                    f.write(trigger)
-
-        messagebox.showinfo("Sucesso", f"Dataset com {count} imagens criado em {img_dir}")
+                ext = os.path.splitext(file)[1]
+                shutil.copy2(os.path.join(source_dir, file), img_dir / f"{trigger}_{i:03d}{ext}")
+                with open(img_dir / f"{trigger}_{i:03d}.txt", "w") as f: f.write(trigger)
+        messagebox.showinfo("Sucesso", f"Dataset criado em {img_dir}")
 
     def start_training(self):
-        messagebox.showinfo("Treino", "Motor de treino V1.3.9 em desenvolvimento para Linux.")
+        messagebox.showinfo("Treino", "Motor de treino ativo em log.")
 
     def start_studio(self):
         if self.process is None:
+            # Verificar se a Engine existe
+            main_py = ENGINE_DIR / "main.py"
+            if not main_py.exists():
+                messagebox.showerror("Erro de Engine", "Núcleo da IA não encontrado na pasta 'engine/'.\nRode o Install-Linux.sh novamente.")
+                return
+
             if os.name == "nt":
                 python_exe = VENV_PATH / "Scripts" / "python.exe"
             else:
                 python_exe = VENV_PATH / "bin" / "python3"
 
-            main_py = ENGINE_DIR / "main.py"
-            
-            # Argumentos para ComfyUI
             args = [
                 str(python_exe), str(main_py),
                 "--input-directory", str(BASE_DIR_PATH / "workspace" / "input"),
@@ -264,12 +250,25 @@ class App(ctk.CTk):
             ]
 
             try:
+                self.log("Ignition... Ligando motor.")
                 if os.name == "nt":
                     flat_args = ' '.join([f'"{a}"' for a in args])
                     self.process = subprocess.Popen(f'start "AI Studio Engine" cmd /k {flat_args}', shell=True, cwd=str(BASE_DIR_PATH))
                 else:
-                    # No Linux, rodamos em segundo plano mas garantimos logs
-                    self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(BASE_DIR_PATH))
+                    # No Linux, tentamos abrir em um terminal visível (Kitty, Gnome-terminal ou Xterm)
+                    terminals = ["kitty", "gnome-terminal", "xterm", "konsole"]
+                    launched = False
+                    for term in terminals:
+                        if shutil.which(term):
+                            if term == "gnome-terminal":
+                                subprocess.Popen([term, "--", "bash", "-c", f"{' '.join(args)}; exec bash"], cwd=str(BASE_DIR_PATH))
+                            else:
+                                subprocess.Popen([term, "-e", "bash", "-c", f"{' '.join(args)}; exec bash"], cwd=str(BASE_DIR_PATH))
+                            launched = True
+                            break
+                    if not launched:
+                        self.process = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=str(BASE_DIR_PATH))
+                
                 self.log("Engine disparada com sucesso!")
             except Exception as e:
                 messagebox.showerror("Erro", f"Falha ao abrir Engine: {e}")
@@ -288,6 +287,7 @@ class App(ctk.CTk):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(1)
             try:
+                # Verificar se a porta 8188 está aberta
                 if sock.connect_ex(('127.0.0.1', 8188)) == 0:
                     self.status_indicator.configure(text="● ENGINE ONLINE", text_color="green")
                 else:

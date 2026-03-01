@@ -1,47 +1,56 @@
 #!/bin/bash
 
-# --- AI NEURAL VIDEO STUDIO - INSTALLER (LINUX) ---
-# Forçando o diretório para a raiz do script
+# --- AI NEURAL VIDEO STUDIO - INSTALLER (LINUX V1.4.0) ---
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
 echo "==================================================="
-echo "    AI NEURAL VIDEO STUDIO - INSTALLER (LINUX)"
+echo "    AI NEURAL VIDEO STUDIO - RECOVERY INSTALLER"
 echo "==================================================="
 
-# 1. Criar VENV
-echo "[+] Criando ambiente virtual..."
-python3 -m venv .venv
+# 1. Recuperar Engine se estiver vazia
+if [ -z "$(ls -A engine 2>/dev/null)" ]; then
+    echo "[!] Pasta Engine vazia. Baixando núcleo ComfyUI..."
+    git clone https://github.com/comfyanonymous/ComfyUI.git temp_engine
+    mv temp_engine/* engine/
+    mv temp_engine/.* engine/ 2>/dev/null
+    rm -rf temp_engine
+    echo "[V] Núcleo baixado com sucesso."
+fi
 
-# 2. Ativar e Instalar
+# 2. Criar VENV
+echo "[+] Configurando ambiente virtual..."
+python3 -m venv .venv
 source .venv/bin/activate
 
+# 3. Instalar dependências base
 echo "[+] Instalando dependências base (Torch/CUDA)..."
 pip install --upgrade pip
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
+# 4. Instalar requisitos da Engine
 echo "[+] Instalando dependências da Engine..."
 if [ -f "engine/requirements.txt" ]; then
     pip install -r engine/requirements.txt
 else
-    echo "[!] Alerta: engine/requirements.txt não encontrado. Instalando básicos..."
     pip install psutil
 fi
 
+# 5. Instalar requisitos da Interface
 echo "[+] Instalando Interface e Downloader..."
 pip install customtkinter darkdetect requests tqdm pillow packaging
 
-# 3. Criar Pastas
-echo "[+] Organizando estrutura de pastas..."
+# 6. Criar Pastas
 mkdir -p models/checkpoints models/loras models/vae workspace/input workspace/output config
 
-# 4. ComfyUI Manager
-if [ -d "engine/custom_nodes" ]; then
-    echo "[+] Instalando ComfyUI Manager..."
-    git clone https://github.com/ltdrdata/ComfyUI-Manager.git engine/custom_nodes/ComfyUI-Manager 2>/dev/null || echo "[*] Manager já existe."
+# 7. ComfyUI Manager
+echo "[+] Verificando ComfyUI Manager..."
+mkdir -p engine/custom_nodes
+if [ ! -d "engine/custom_nodes/ComfyUI-Manager" ]; then
+    git clone https://github.com/ltdrdata/ComfyUI-Manager.git engine/custom_nodes/ComfyUI-Manager
 fi
 
 echo "==================================================="
-echo "[V] Instalação Concluída!"
+echo "[V] Instalação e Recuperação Concluídas!"
 echo "Use './Start-Studio.sh' para iniciar."
 echo "==================================================="
