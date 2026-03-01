@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 from huggingface_hub import hf_hub_download
 from pathlib import Path
 
@@ -16,8 +17,12 @@ def download_from_hf(repo_id, filename, model_type="checkpoints", subfolder=None
     print(f"[*] Repo: {repo_id}")
     print(f"[*] Arquivo: {filename}")
     print(f"[*] Destino: {dest_folder}")
+    print(f"[*] Nota: Arquivos grandes podem demorar para mostrar progresso no console.")
     
     try:
+        # hf_hub_download handles progress bars automatically if tqdm is present
+        # but to ensure visibility in our stealth log, we'll just let it run
+        # and print a start message.
         path = hf_hub_download(
             repo_id=repo_id,
             filename=filename,
@@ -28,6 +33,9 @@ def download_from_hf(repo_id, filename, model_type="checkpoints", subfolder=None
         return path
     except Exception as e:
         print(f"\n[X] Erro no download do HF: {e}")
+        # Sugestão de correção para erros comuns
+        if "404" in str(e):
+            print("[!] Dica: Verifique se o nome do arquivo respeita Maiúsculas/Minúsculas (ex: Q4_K_M vs q4_k_m).")
         return None
 
 if __name__ == "__main__":

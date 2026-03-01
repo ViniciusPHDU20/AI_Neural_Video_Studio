@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# --- AI NEURAL VIDEO STUDIO - INSTALLER (LINUX V1.4.0) ---
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# --- AI NEURAL VIDEO STUDIO - INSTALLER (LINUX V3.0.0) ---
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$BASE_DIR"
 
 echo "==================================================="
-echo "    AI NEURAL VIDEO STUDIO - RECOVERY INSTALLER"
+echo "    AI NEURAL VIDEO STUDIO - ENTERPRISE INSTALLER"
 echo "==================================================="
 
 # 1. Recuperar Engine se estiver vazia
@@ -51,6 +51,6 @@ if [ ! -d "engine/custom_nodes/ComfyUI-Manager" ]; then
 fi
 
 echo "==================================================="
-echo "[V] Instalação e Recuperação Concluídas!"
-echo "Use './Start-Studio.sh' para iniciar."
+echo "[V] Instalação V3.0.0 Concluída!"
+echo "Use './Studio-Linux.sh' para iniciar."
 echo "==================================================="

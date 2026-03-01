@@ -20,8 +20,10 @@ models/diffusion_models/*.safetensors
 
 # Usuário e Log
 config/user_config.json
+config/vault.json
 workspace/output/*
 workspace/input/*
+workspace/temp/*
 *.log
 
 # Engine interna (Opcional: Se quiser que o usuário clone a engine separadamente, mas vamos incluir a engine limpa)
@@ -30,3 +32,4 @@ engine/output/*
 engine/input/*
 engine/models/*
 engine/user/*
+tools/tagger_models/

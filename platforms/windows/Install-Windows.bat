@@ -1,9 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
-title AI Neural Video Studio - Intelligence Installer V1.3.5
+title AI Neural Video Studio - Intelligence Installer V3.0.0
 echo ===================================================
-echo     INICIANDO INSTALACAO (HARD-LINK PATCH)
+echo     INICIANDO INSTALACAO (ENTERPRISE ARCH)
 echo ===================================================
+
+cd /d "%~dp0..\.."
 
 :: 1. Localizar Python Real (Ignorando Microsoft Store)
 echo [*] Localizando interpretador Python real...
@@ -35,7 +37,6 @@ if not defined PY_REAL (
 
 echo [V] Python encontrado em: %PY_REAL%
 "%PY_REAL%" --version
-pause
 
 :: 2. Detectar GPU
 echo [*] Detectando Hardware...
@@ -45,15 +46,14 @@ if %errorlevel% equ 0 set GPU=NVIDIA
 powershell -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name" | findstr /i "AMD" > nul
 if %errorlevel% equ 0 set GPU=AMD
 echo [+] GPU Identificada: %GPU%
-pause
 
-:: 3. Criar Ambiente Virtual (Usando o Python Real)
+:: 3. Criar Ambiente Virtual (Na Raiz)
 if exist ".venv" (
-    echo [!] Pasta .venv detectada. Reinstalando para garantir integridade...
+    echo [!] Pasta .venv detectada na raiz. Reinstalando...
     rd /s /q .venv
 )
 
-echo [*] Criando ambiente virtual...
+echo [*] Criando ambiente virtual na raiz do projeto...
 "%PY_REAL%" -m venv .venv
 if %errorlevel% neq 0 (
     echo [X] ERRO CRITICO ao criar ambiente. Tente rodar como Administrador.
@@ -61,7 +61,6 @@ if %errorlevel% neq 0 (
     exit /b
 )
 echo [V] Ambiente virtual criado.
-pause
 
 :: 4. Instalar Dependencias
 echo [*] Ativando e Instalando pacotes...
@@ -77,7 +76,7 @@ if "%GPU%"=="NVIDIA" (
     pip install torch torchvision torchaudio
 )
 
-pip install customtkinter darkdetect requests tqdm pillow packaging
+pip install huggingface-hub psutil customtkinter darkdetect requests tqdm pillow packaging
 if exist "engine\requirements.txt" pip install -r engine\requirements.txt
 
 :: 5. Finalizar
@@ -88,6 +87,6 @@ if not exist "workspace\input" mkdir workspace\input
 if not exist "workspace\output" mkdir workspace\output
 
 echo ===================================================
-echo [V] ESTUDIO V1.3.5 INSTALADO COM SUCESSO!
+echo [V] ESTUDIO V3.0.0 INSTALADO COM SUCESSO!
 echo ===================================================
 pause
