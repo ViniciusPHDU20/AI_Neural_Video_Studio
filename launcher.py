@@ -221,7 +221,11 @@ class App(ctk.CTk):
     def persist_config(self):
         d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "ram_profile": self.active_ram_profile}
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_FILE, 'w') as f: json.dump(d, f, indent=4)
+        # Escrita atômica para evitar perda de dados
+        temp_file = CONFIG_FILE.with_suffix(".tmp")
+        with open(temp_file, 'w') as f:
+            json.dump(d, f, indent=4)
+        os.replace(temp_file, CONFIG_FILE)
 
     def kill_port(self, port):
         try:
