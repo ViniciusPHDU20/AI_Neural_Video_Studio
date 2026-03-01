@@ -147,7 +147,9 @@ class App(ctk.CTk):
 
     def save_api_key(self):
         key = self.entry_api.get().strip()
-        if not key: return
+        if not key or len(key) < 10 or " " in key:
+            messagebox.showwarning("Erro de Formato", "A chave inserida não parece válida (muito curta ou contém espaços).")
+            return
         if key not in self.saved_apis:
             self.saved_apis.append(key)
             self.persist_config(); self.refresh_api_ui()
@@ -155,7 +157,9 @@ class App(ctk.CTk):
         self.entry_api.delete(0, "end")
 
     def remove_api_key(self, key):
-        if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
+        if key in self.saved_apis:
+            self.saved_apis.remove(key)
+            self.persist_config(); self.refresh_api_ui()
 
     def persist_config(self):
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -165,10 +169,11 @@ class App(ctk.CTk):
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, 'r') as f:
-                    d = json.load(f)
-                    self.saved_apis = d.get("api_keys", [])
-                    old = d.get("civitai_api_key")
-                    if old and old not in self.saved_apis: self.saved_apis.append(old)
+                    data = json.load(f)
+                    raw_keys = data.get("api_keys", [])
+                    # Limpar chaves inválidas (logs ou frases) e deduplicar
+                    valid_keys = [k for k in raw_keys if " " not in k and len(k) > 10]
+                    self.saved_apis = list(dict.fromkeys(valid_keys))
                 self.refresh_api_ui()
             except: pass
 
