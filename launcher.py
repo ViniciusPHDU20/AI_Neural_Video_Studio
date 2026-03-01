@@ -43,7 +43,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE SISTEMA ---
-VERSION = "2.5.0 (Neural Orchestrator)"
+VERSION = "2.6.0 (Neural Commander)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -104,6 +104,7 @@ class App(ctk.CTk):
         self.active_ram_profile = "Balanced (Padrao)"
         self.expert_flags = ""
         self.console_active = True
+        self.all_inventory_items = []
 
         # Layout
         self.grid_columnconfigure(1, weight=1)
@@ -113,7 +114,7 @@ class App(ctk.CTk):
         self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0, fg_color="#0a0a0a")
         self.sidebar.grid(row=0, column=0, sticky="nsew")
         
-        ctk.CTkLabel(self.sidebar, text="NEURAL ORCHESTRATOR", font=ctk.CTkFont(size=20, weight="bold", family="Consolas")).pack(pady=30)
+        ctk.CTkLabel(self.sidebar, text="NEURAL COMMANDER", font=ctk.CTkFont(size=20, weight="bold", family="Consolas")).pack(pady=30)
         
         self.status_box = ctk.CTkFrame(self.sidebar, fg_color="#1a1a1a", corner_radius=10)
         self.status_box.pack(padx=15, pady=5, fill="x")
@@ -130,9 +131,9 @@ class App(ctk.CTk):
 
         ctk.CTkButton(self.sidebar, text="SYSTEM PURGE", command=lambda: self.system_purge(), fg_color="#333", height=35).pack(padx=20, pady=15, fill="x")
 
-        self.btn_start = ctk.CTkButton(self.sidebar, text="IGNITION", command=lambda: self.start_studio(), fg_color="#2d5a27", hover_color="#1e3d1a", height=50, font=ctk.CTkFont(weight="bold"))
+        self.btn_start = ctk.CTkButton(self.sidebar, text="ENGINE IGNITION", command=lambda: self.start_studio(), fg_color="#2d5a27", hover_color="#1e3d1a", height=50, font=ctk.CTkFont(weight="bold"))
         self.btn_start.pack(padx=20, pady=10, fill="x")
-        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE", command=lambda: self.stop_studio(), fg_color="#8b0000", hover_color="#5a0000", height=50, font=ctk.CTkFont(weight="bold"))
+        self.btn_stop = ctk.CTkButton(self.sidebar, text="TERMINATE CORE", command=lambda: self.stop_studio(), fg_color="#8b0000", hover_color="#5a0000", height=50, font=ctk.CTkFont(weight="bold"))
         self.btn_stop.pack(padx=20, pady=10, fill="x")
 
         # --- TABS ---
@@ -150,105 +151,40 @@ class App(ctk.CTk):
         self.detect_hardware(); self.load_config()
         self.check_status_loop(); self.start_telemetry_loop(); self.start_console_stream()
 
-    # --- CONSOLE MODULE ---
-    def setup_console_tab(self):
-        self.console_box = ctk.CTkTextbox(self.tab_log, font=("Consolas", 11), fg_color="#050505", text_color="#44ff44")
-        self.console_box.pack(padx=20, pady=20, fill="both", expand=True)
-        ctk.CTkButton(self.tab_log, text="CLEAR CONSOLE", command=lambda: self.console_box.delete("1.0", "end"), height=35, fg_color="#333").pack(pady=10)
-
-    def start_console_stream(self):
-        def stream():
-            while self.console_active:
-                if ENGINE_LOG.exists():
-                    with open(ENGINE_LOG, "r") as f:
-                        f.seek(0, 2) # Go to end
-                        while self.console_active:
-                            line = f.readline()
-                            if line:
-                                self.console_box.insert("end", line)
-                                self.console_box.see("end")
-                            else: time.sleep(0.5)
-                else: time.sleep(2)
-        threading.Thread(target=stream, daemon=True).start()
-
-    # --- UPDATED OPTIMIZER (PROFILES) ---
-    def setup_optimizer_tab(self):
-        f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
-        f.pack(padx=40, pady=20, fill="both", expand=True)
-        ctk.CTkLabel(f, text="ENVIRONMENT ORCHESTRATION", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=15)
-        
-        f_prof = ctk.CTkFrame(f, fg_color="transparent")
-        f_prof.pack(padx=20, pady=10, fill="x")
-        self.entry_prof_name = ctk.CTkEntry(f_prof, placeholder_text="New Profile Name...", height=40); self.entry_prof_name.pack(side="left", expand=True, fill="x", padx=5)
-        ctk.CTkButton(f_prof, text="SAVE PROFILE", command=lambda: self.save_env_profile(), width=120, height=40, fg_color="#2d5a27").pack(side="left", padx=5)
-        
-        self.profile_picker = ctk.CTkOptionMenu(f, values=["Default"], command=lambda x: self.load_env_profile(x), width=450, height=45); self.profile_picker.pack(pady=15)
-
-        self.lbl_detected = ctk.CTkLabel(f, text="HARDWARE: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=5)
-        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=450, height=40); self.gpu_picker.pack(pady=5)
-        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=450, height=40); self.ram_menu.pack(pady=5)
-        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Expert Flags...", height=45, width=450); self.entry_expert.pack(pady=5)
-        self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
-        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=600); self.lbl_flags.pack(pady=25)
-
-    def save_env_profile(self):
-        name = self.entry_prof_name.get().strip()
-        if not name: return
-        self.env_profiles[name] = {
-            "gpu": self.gpu_picker.get(),
-            "ram": self.ram_menu.get(),
-            "expert": self.entry_expert.get()
-        }
-        self.persist_config(); self.refresh_optimizer_ui(); messagebox.showinfo("Orchestrator", f"Profile '{name}' saved!")
-
-    def load_env_profile(self, name):
-        p = self.env_profiles.get(name)
-        if p:
-            self.gpu_picker.set(p["gpu"]); self.ram_menu.set(p["ram"]); self.entry_expert.delete(0, "end"); self.entry_expert.insert(0, p["expert"])
-            self.set_profile(p["gpu"]); self.set_ram_profile(p["ram"]); self.update_expert_flags()
-
-    # --- BASE METHODS (STABILIZED) ---
-    def load_gallery_item(self, path):
-        try:
-            img = Image.open(path); meta_text = "Metadata Not Found."
-            if img.format == "PNG":
-                meta = img.info
-                if "prompt" in meta: p = json.loads(meta["prompt"]); meta_text = f"--- COGNITIVE PROMPT ---\n{json.dumps(p, indent=2)}"
-            ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(500, 500))
-            self.lbl_gal_img.configure(image=ctk_img, text=""); self.txt_gal_meta.delete("1.0", "end"); self.txt_gal_meta.insert("end", meta_text)
-        except Exception as e: messagebox.showerror("Gallery Error", str(e))
-
-    def setup_gallery_tab(self):
-        f_main = ctk.CTkFrame(self.tab_gal, fg_color="transparent"); f_main.pack(fill="both", expand=True)
-        f_main.grid_columnconfigure(0, weight=1); f_main.grid_columnconfigure(1, weight=1); f_main.grid_rowconfigure(0, weight=1)
-        self.gal_list = ctk.CTkScrollableFrame(f_main, label_text="OUTPUT REPOSITORY", fg_color="#050505")
-        self.gal_list.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        self.f_gal_view = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333")
-        self.f_gal_view.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        self.lbl_gal_img = ctk.CTkLabel(self.f_gal_view, text="Select an image", width=500, height=500, fg_color="#050505", corner_radius=10); self.lbl_gal_img.pack(padx=20, pady=20)
-        self.txt_gal_meta = ctk.CTkTextbox(self.f_gal_view, height=250, font=("Consolas", 11), fg_color="transparent"); self.txt_gal_meta.pack(padx=20, pady=10, fill="both", expand=True)
-        ctk.CTkButton(self.tab_gal, text="REFRESH GALLERY", command=lambda: self.refresh_gallery(), height=40).pack(pady=10)
-
-    def refresh_gallery(self):
-        for w in self.gal_list.winfo_children(): w.destroy()
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.lower().endswith((".png", ".jpg", ".webp"))], reverse=True)
-        for f in files:
-            path = OUTPUT_DIR / f
-            btn = ctk.CTkButton(self.gal_list, text=f"📷 {f}", anchor="w", fg_color="transparent", hover_color="#222", command=lambda p=path: self.load_gallery_item(p))
-            btn.pack(fill="x", pady=1)
-
+    # --- INVENTORY MODULE (SEARCH & DELETE) ---
     def setup_inventory_tab(self):
+        f_top = ctk.CTkFrame(self.tab_inv, fg_color="transparent")
+        f_top.pack(fill="x", padx=10, pady=5)
+        self.entry_inv_search = ctk.CTkEntry(f_top, placeholder_text="🔍 Search Models...", height=35)
+        self.entry_inv_search.pack(side="left", expand=True, fill="x", padx=5)
+        self.entry_inv_search.bind("<KeyRelease>", lambda e: self.filter_inventory())
+        ctk.CTkButton(f_top, text="REFRESH", command=lambda: self.refresh_models_list(), width=80).pack(side="left", padx=5)
+
         f_main = ctk.CTkFrame(self.tab_inv, fg_color="transparent"); f_main.pack(fill="both", expand=True)
         f_main.grid_columnconfigure(0, weight=1); f_main.grid_columnconfigure(1, weight=1); f_main.grid_rowconfigure(0, weight=1)
-        self.inv_scroll = ctk.CTkScrollableFrame(f_main, label_text="NEURAL INVENTORY", fg_color="#050505")
+
+        self.inv_scroll = ctk.CTkScrollableFrame(f_main, label_text="ASSET REPOSITORY", fg_color="#050505")
         self.inv_scroll.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        
         self.f_insight = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333")
         self.f_insight.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        self.lbl_preview = ctk.CTkLabel(self.f_insight, text="Neural Preview Hub", width=450, height=450, fg_color="#050505", corner_radius=10); self.lbl_preview.pack(padx=20, pady=20)
+        self.lbl_preview = ctk.CTkLabel(self.f_insight, text="Neural Insight", width=450, height=450, fg_color="#050505", corner_radius=10); self.lbl_preview.pack(padx=20, pady=20)
         self.txt_meta = ctk.CTkTextbox(self.f_insight, height=200, font=("Consolas", 11), fg_color="transparent"); self.txt_meta.pack(padx=20, pady=10, fill="both", expand=True)
-        ctk.CTkButton(self.tab_inv, text="REFRESH INVENTORY", command=lambda: self.refresh_models_list(), height=40).pack(pady=10)
+        
+        f_actions = ctk.CTkFrame(self.f_insight, fg_color="transparent")
+        f_actions.pack(pady=10, fill="x")
+        self.btn_del_model = ctk.CTkButton(f_actions, text="DELETE ASSET", fg_color="#8b0000", hover_color="#5a0000", command=lambda: self.delete_model_action())
+        self.btn_del_model.pack(side="bottom", pady=10, padx=20, fill="x")
+        self.active_model_path = None
+
         self.lbl_inv_total = ctk.CTkLabel(self.tab_inv, text="Total Size: 0.00 GB", font=("Consolas", 12, "bold")); self.lbl_inv_total.pack(pady=5)
+
+    def filter_inventory(self):
+        query = self.entry_inv_search.get().lower()
+        for w in self.inv_scroll.winfo_children():
+            if isinstance(w, ctk.CTkButton) and "●" in w.cget("text"):
+                if query in w.cget("text").lower(): w.pack(fill="x", pady=1)
+                else: w.pack_forget()
 
     def refresh_models_list(self):
         for w in self.inv_scroll.winfo_children(): w.destroy()
@@ -272,6 +208,7 @@ class App(ctk.CTk):
         self.lbl_inv_total.configure(text=f"Total Inventory Size: {total_size:.2f} GB")
 
     def load_model_insight(self, path, name, size):
+        self.active_model_path = path
         trigger = self.get_lora_trigger(str(path))
         info = f"NAME: {name}\nSIZE: {size:.2f} GB\nPATH: {path}\n\n{trigger}"
         self.txt_meta.delete("1.0", "end"); self.txt_meta.insert("end", info)
@@ -280,6 +217,95 @@ class App(ctk.CTk):
             img = Image.open(prev_path); ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(450, 450))
             self.lbl_preview.configure(image=ctk_img, text="")
         else: self.lbl_preview.configure(image=None, text="No Preview Found")
+
+    def delete_model_action(self):
+        if not self.active_model_path: return
+        if messagebox.askyesno("Delete", f"Deseja deletar permanentemente o modelo:\n{self.active_model_path.name}?"):
+            try:
+                os.remove(self.active_model_path)
+                prev = self.active_model_path.with_suffix(".preview.png")
+                if prev.exists(): os.remove(prev)
+                self.refresh_models_list(); self.active_model_path = None
+                self.lbl_preview.configure(image=None, text="Deleted."); self.txt_meta.delete("1.0", "end")
+            except Exception as e: messagebox.showerror("Error", str(e))
+
+    # --- GALLERY MODULE (DELETE) ---
+    def setup_gallery_tab(self):
+        f_main = ctk.CTkFrame(self.tab_gal, fg_color="transparent"); f_main.pack(fill="both", expand=True)
+        f_main.grid_columnconfigure(0, weight=1); f_main.grid_columnconfigure(1, weight=1); f_main.grid_rowconfigure(0, weight=1)
+        self.gal_list = ctk.CTkScrollableFrame(f_main, label_text="OUTPUT REPOSITORY", fg_color="#050505")
+        self.gal_list.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        self.f_gal_view = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333")
+        self.f_gal_view.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        self.lbl_gal_img = ctk.CTkLabel(self.f_gal_view, text="Select an image", width=500, height=500, fg_color="#050505", corner_radius=10); self.lbl_gal_img.pack(padx=20, pady=20)
+        self.txt_gal_meta = ctk.CTkTextbox(self.f_gal_view, height=200, font=("Consolas", 11), fg_color="transparent"); self.txt_gal_meta.pack(padx=20, pady=10, fill="both", expand=True)
+        self.btn_del_img = ctk.CTkButton(self.f_gal_view, text="DELETE IMAGE", fg_color="#8b0000", hover_color="#5a0000", command=lambda: self.delete_gallery_item())
+        self.btn_del_img.pack(side="bottom", pady=10, padx=20, fill="x")
+        self.active_gallery_path = None
+        ctk.CTkButton(self.tab_gal, text="REFRESH GALLERY", command=lambda: self.refresh_gallery(), height=40).pack(pady=10)
+
+    def refresh_gallery(self):
+        for w in self.gal_list.winfo_children(): w.destroy()
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.lower().endswith((".png", ".jpg", ".webp"))], reverse=True)
+        for f in files:
+            path = OUTPUT_DIR / f
+            btn = ctk.CTkButton(self.gal_list, text=f"📷 {f}", anchor="w", fg_color="transparent", hover_color="#222", command=lambda p=path: self.load_gallery_item(p))
+            btn.pack(fill="x", pady=1)
+
+    def load_gallery_item(self, path):
+        self.active_gallery_path = path
+        try:
+            img = Image.open(path); meta_text = "Metadata Not Found."
+            if img.format == "PNG":
+                meta = img.info
+                if "prompt" in meta: p = json.loads(meta["prompt"]); meta_text = f"--- COGNITIVE PROMPT ---\n{json.dumps(p, indent=2)}"
+            ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(500, 500))
+            self.lbl_gal_img.configure(image=ctk_img, text=""); self.txt_gal_meta.delete("1.0", "end"); self.txt_gal_meta.insert("end", meta_text)
+        except Exception as e: messagebox.showerror("Gallery Error", str(e))
+
+    def delete_gallery_item(self):
+        if not self.active_gallery_path: return
+        if messagebox.askyesno("Delete", "Deletar esta imagem permanentemente?"):
+            try:
+                os.remove(self.active_gallery_path)
+                self.refresh_gallery(); self.active_gallery_path = None
+                self.lbl_gal_img.configure(image=None, text="Deleted."); self.txt_gal_meta.delete("1.0", "end")
+            except Exception as e: messagebox.showerror("Error", str(e))
+
+    # --- BASE METHODS (STABILIZED) ---
+    def setup_console_tab(self):
+        self.console_box = ctk.CTkTextbox(self.tab_log, font=("Consolas", 11), fg_color="#050505", text_color="#44ff44")
+        self.console_box.pack(padx=20, pady=20, fill="both", expand=True)
+        ctk.CTkButton(self.tab_log, text="CLEAR CONSOLE", command=lambda: self.console_box.delete("1.0", "end"), height=35, fg_color="#333").pack(pady=10)
+
+    def start_console_stream(self):
+        def stream():
+            while self.console_active:
+                if ENGINE_LOG.exists():
+                    with open(ENGINE_LOG, "r") as f:
+                        f.seek(0, 2)
+                        while self.console_active:
+                            line = f.readline()
+                            if line:
+                                self.console_box.insert("end", line)
+                                self.console_box.see("end")
+                            else: time.sleep(0.5)
+                else: time.sleep(2)
+        threading.Thread(target=stream, daemon=True).start()
+
+    def get_lora_trigger(self, file_path):
+        try:
+            with open(file_path, "rb") as f:
+                header_size = struct.unpack("<Q", f.read(8))[0]
+                header_json = f.read(header_size).decode("utf-8")
+                header = json.loads(header_json); metadata = header.get("__metadata__", {})
+                tags = metadata.get("ss_tag_frequency", "")
+                if tags:
+                    tag_dict = json.loads(tags) if isinstance(tags, str) and tags.startswith("{") else {}
+                    if tag_dict: main_tags = list(tag_dict.keys())[0] if isinstance(tag_dict, dict) else ""; return f"COGNITIVE TAGS: {str(main_tags)}"
+                return ""
+        except: return ""
 
     def detect_hardware(self):
         try:
@@ -335,43 +361,6 @@ class App(ctk.CTk):
                 self.log_acquisition.insert("end", f"[V] Ignition: {self.active_profile}\n")
             except Exception as e: messagebox.showerror("Critical", str(e))
 
-    def stop_studio(self):
-        self.kill_port(8188)
-        if self.process:
-            try:
-                if os.name == "nt": subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
-                else: self.process.terminate()
-            except: pass
-            self.process = None
-        self.status_indicator.configure(text="● SYSTEM OFFLINE", text_color="#ff4444")
-
-    def check_status_loop(self):
-        def check():
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1)
-            online = s.connect_ex(('127.0.0.1', 8188)) == 0
-            self.status_indicator.configure(text="● SYSTEM OPERATIONAL" if online else "● SYSTEM OFFLINE", text_color="#44ff44" if online else "#ff4444")
-            s.close(); self.after(5000, check)
-        self.after(2000, check)
-
-    def persist_config(self):
-        d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "ram_profile": self.active_ram_profile, "expert_flags": self.expert_flags, "env_profiles": self.env_profiles}
-        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        temp_file = CONFIG_FILE.with_suffix(".tmp")
-        with open(temp_file, 'w') as f: json.dump(d, f, indent=4)
-        os.replace(temp_file, CONFIG_FILE)
-
-    def load_config(self):
-        if CONFIG_FILE.exists():
-            try:
-                with open(CONFIG_FILE, 'r') as f:
-                    d = json.load(f); self.saved_apis = d.get("api_keys", []); self.env_profiles = d.get("env_profiles", {})
-                    self.active_profile = d.get("hw_profile", ""); self.active_ram_profile = d.get("ram_profile", "Balanced (Padrao)")
-                    self.expert_flags = d.get("expert_flags", "")
-                self.refresh_api_ui(); self.refresh_optimizer_ui()
-                if self.expert_flags: self.entry_expert.delete(0, "end"); self.entry_expert.insert(0, self.expert_flags)
-                self.profile_picker.configure(values=["Default"] + list(self.env_profiles.keys()))
-            except: pass
-
     def setup_acquisition_tab(self):
         self.preset_menu = ctk.CTkOptionMenu(self.tab_dl, values=list(PRESET_MODELS.keys()), command=lambda x: self.apply_preset(x), height=45); self.preset_menu.pack(padx=20, pady=20, fill="x")
         self.entry_id = ctk.CTkEntry(self.tab_dl, placeholder_text="CIVITAI ID", height=45); self.entry_id.pack(padx=20, pady=10, fill="x")
@@ -413,99 +402,46 @@ class App(ctk.CTk):
         ctk.CTkButton(f_controls, text="OPEN FOLDER", command=lambda: os.system(f"xdg-open '{WORKFLOWS_DIR}'"), fg_color="#444", height=40).pack(side="left", padx=10)
         self.refresh_canvas()
 
-    def kill_port(self, port):
-        try:
-            if os.name != "nt":
-                subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True, timeout=2)
-                subprocess.run(f"lsof -ti:{port} | xargs kill -9", shell=True, capture_output=True, timeout=2)
-            else: subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True, timeout=2)
-        except: pass
+    def load_config(self):
+        if CONFIG_FILE.exists():
+            try:
+                with open(CONFIG_FILE, 'r') as f:
+                    d = json.load(f); self.saved_apis = d.get("api_keys", []); self.env_profiles = d.get("env_profiles", {})
+                    self.active_profile = d.get("hw_profile", ""); self.active_ram_profile = d.get("ram_profile", "Balanced (Padrao)")
+                    self.expert_flags = d.get("expert_flags", "")
+                self.refresh_api_ui(); self.refresh_optimizer_ui()
+                if self.expert_flags: self.entry_expert.delete(0, "end"); self.entry_expert.insert(0, self.expert_flags)
+                self.profile_picker.configure(values=["Default"] + list(self.env_profiles.keys()))
+            except: pass
 
-    def refresh_api_ui(self):
-        for w in self.api_list_frame.winfo_children(): w.destroy()
-        for key in self.saved_apis:
-            f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2, padx=5)
-            ctk.CTkLabel(f, text=f"ID: {key[:6]}***", font=("Consolas", 12)).pack(side="left", padx=10)
-            ctk.CTkButton(f, text="X", width=40, height=22, command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=5)
+    def persist_config(self):
+        d = {"api_keys": self.saved_apis, "hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "ram_profile": self.active_ram_profile, "expert_flags": self.expert_flags, "env_profiles": self.env_profiles}
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        temp_file = CONFIG_FILE.with_suffix(".tmp")
+        with open(temp_file, 'w') as f: json.dump(d, f, indent=4)
+        os.replace(temp_file, CONFIG_FILE)
 
-    def refresh_optimizer_ui(self):
-        self.lbl_detected.configure(text=f"HARDWARE: {self.detected_vendor}")
-        self.lbl_vram_total.configure(text=f"TOTAL VRAM: {self.detected_vram} MB")
-        models = list(GPU_DATABASE[self.detected_vendor].keys())
-        self.gpu_picker.configure(values=models)
-        if models:
-            d = self.active_profile if self.active_profile in models else models[0]
-            self.gpu_picker.set(d); self.set_profile(d)
-        self.profile_picker.configure(values=["Default"] + list(self.env_profiles.keys()))
+    def load_env_profile(self, name):
+        p = self.env_profiles.get(name)
+        if p:
+            self.gpu_picker.set(p["gpu"]); self.ram_menu.set(p["ram"]); self.entry_expert.delete(0, "end"); self.entry_expert.insert(0, p["expert"])
+            self.active_profile = p["gpu"]; self.active_ram_profile = p["ram"]; self.expert_flags = p["expert"]
+            self.update_flags_preview()
 
-    def save_api_key(self):
-        key = self.entry_api.get().strip()
-        if len(key) >= 15 and " " not in key:
-            if key not in self.saved_apis: self.saved_apis.append(key); self.persist_config(); self.refresh_api_ui()
-        self.entry_api.delete(0, "end")
-
-    def remove_api_key(self, key):
-        if key in self.saved_apis: self.saved_apis.remove(key); self.persist_config(); self.refresh_api_ui()
-
-    def set_profile(self, choice):
-        self.active_profile = choice; self.update_flags_preview(); self.persist_config()
-
-    def set_ram_profile(self, choice):
-        self.active_ram_profile = choice; self.update_flags_preview(); self.persist_config()
-
-    def apply_preset(self, choice):
-        p = PRESET_MODELS.get(choice)
-        if p and p["id"]: self.entry_id.delete(0, "end"); self.entry_id.insert(0, p["id"]); self.option_type.set(p["type"])
-
-    def dataset_wizard(self):
-        trigger = self.entry_trigger.get().strip()
-        if not trigger: messagebox.showwarning("Wizard", "Defina um TRIGGER WORD primeiro."); return
-        src = ctk.filedialog.askdirectory()
-        if not src: return
-        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
-        dst.mkdir(parents=True, exist_ok=True)
-        res = int(self.train_res.get().strip()) if self.train_res.get().strip().isdigit() else 512
-        def process():
-            self.log_train.insert("end", "[*] Iniciando Dataset Wizard Neural...\n")
-            for i, f in enumerate(os.listdir(src)):
-                if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                    ext = os.path.splitext(f)[1]; path_src = os.path.join(src, f); path_dst = dst / f"{trigger}_{i:03d}{ext}"
-                    if self.chk_resize.get():
-                        with Image.open(path_src) as img:
-                            img = img.convert("RGB"); img.thumbnail((res, res), Image.Resampling.LANCZOS)
-                            new_img = Image.new("RGB", (res, res), (0, 0, 0))
-                            new_img.paste(img, ((res - img.size[0]) // 2, (res - img.size[1]) // 2))
-                            new_img.save(path_dst)
-                    else: shutil.copy2(path_src, path_dst)
-                    with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
-            if self.chk_tagger.get():
-                self.log_train.insert("end", "[*] Invocando AI Neural Tagger...\n")
-                py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
-                tagger_script = get_short_path(TOOLS_DIR / "tagger.py")
-                cmd = [str(py), str(tagger_script), str(dst), trigger]
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-                for line in proc.stdout: self.log_train.insert("end", f" > {line.strip()}\n"); self.log_train.see("end")
-                proc.wait()
-            messagebox.showinfo("Wizard", f"Dataset Neural Completo: {res}x{res} + Tags")
-            self.log_train.insert("end", "[V] PROCESSO CONCLUÍDO COM SUCESSO!\n")
-        threading.Thread(target=process, daemon=True).start()
-
-    def start_training(self):
-        m = self.train_base_model.get().strip(); n = self.train_lora_name.get().strip(); t = self.entry_trigger.get().strip()
-        res = self.train_res.get().strip(); batch = self.train_batch.get().strip()
-        dim = self.train_dim.get().strip(); alpha = self.train_alpha.get().strip()
-        steps = self.train_steps.get().strip(); lr = self.train_lr.get().strip()
-        if not all([m, n, t, res, batch, dim, alpha, steps, lr]): messagebox.showwarning("Erro", "Preencha tudo!"); return
-        threading.Thread(target=self.run_train, args=(m, n, t, res, batch, dim, alpha, steps, lr), daemon=True).start()
-
-    def run_train(self, m, n, t, res, batch, dim, alpha, steps, lr):
-        self.log_train.insert("end", f"[{time.strftime('%H:%M:%S')}] STARTING INDUSTRIAL TRAINING...\n")
-        py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
-        script = get_short_path(TOOLS_DIR / "sd-scripts" / "train_network.py")
-        cmd = [str(py), str(script), "--pretrained_model_name_or_path", m, "--train_data_dir", str(BASE_DIR_PATH / "workspace/training_data" / t / "img"), "--output_dir", str(MODELS_DIR / "loras"), "--output_name", n, "--resolution", f"{res},{res}", "--train_batch_size", batch, "--network_dim", dim, "--network_alpha", alpha, "--max_train_steps", steps, "--learning_rate", lr, "--network_module", "networks.lora", "--xformers", "--mixed_precision", "fp16", "--gradient_checkpointing"]
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        for line in proc.stdout: self.log_train.insert("end", line); self.log_train.see("end")
-        proc.wait()
+    def setup_optimizer_tab(self):
+        f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333")
+        f.pack(padx=40, pady=20, fill="both", expand=True)
+        ctk.CTkLabel(f, text="ENVIRONMENT ORCHESTRATION", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=15)
+        f_prof = ctk.CTkFrame(f, fg_color="transparent"); f_prof.pack(padx=20, pady=10, fill="x")
+        self.entry_prof_name = ctk.CTkEntry(f_prof, placeholder_text="New Profile Name...", height=40); self.entry_prof_name.pack(side="left", expand=True, fill="x", padx=5)
+        ctk.CTkButton(f_prof, text="SAVE PROFILE", command=lambda: self.save_env_profile(), width=120, height=40, fg_color="#2d5a27").pack(side="left", padx=5)
+        self.profile_picker = ctk.CTkOptionMenu(f, values=["Default"], command=lambda x: self.load_env_profile(x), width=450, height=45); self.profile_picker.pack(pady=15)
+        self.lbl_detected = ctk.CTkLabel(f, text="HARDWARE: ---", text_color="#3b8ed0", font=ctk.CTkFont(size=14, weight="bold")); self.lbl_detected.pack(pady=5)
+        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detectando..."], command=lambda x: self.set_profile(x), width=450, height=40); self.gpu_picker.pack(pady=5)
+        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=lambda x: self.set_ram_profile(x), width=450, height=40); self.ram_menu.pack(pady=5)
+        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Expert Flags...", height=45, width=450); self.entry_expert.pack(pady=5)
+        self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
+        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=600); self.lbl_flags.pack(pady=25)
 
 if __name__ == "__main__":
     app = App(); app.mainloop()
