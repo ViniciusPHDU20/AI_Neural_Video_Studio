@@ -36,7 +36,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES DE INTERFACE ---
-VERSION = "1.5.0 (Industrial Edition)"
+VERSION = "1.5.1 (UI Logic Fix)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -111,30 +111,20 @@ class App(ctk.CTk):
         self.check_status_loop()
         self.refresh_models_list()
 
-    # --- SETUP DA INTERFACE INDUSTRIAL ---
-
     def setup_acquisition_tab(self):
-        # Frame de Presets
         f_presets = ctk.CTkFrame(self.tab_dl, fg_color="transparent")
         f_presets.pack(padx=20, pady=10, fill="x")
-        
         ctk.CTkLabel(f_presets, text="INDUSTRIAL PRESETS", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w")
         self.preset_menu = ctk.CTkOptionMenu(f_presets, values=list(PRESET_MODELS.keys()), command=self.apply_preset, dynamic_resizing=False)
         self.preset_menu.pack(pady=5, fill="x")
-
-        # Frame de Input Manual
         f_manual = ctk.CTkFrame(self.tab_dl, fg_color="#252525", corner_radius=10)
         f_manual.pack(padx=20, pady=10, fill="x")
-        
         self.entry_id = ctk.CTkEntry(f_manual, placeholder_text="CIVITAI MODEL ID", height=40, border_width=1)
         self.entry_id.pack(padx=10, pady=15, side="left", expand=True, fill="x")
-        
         self.option_type = ctk.CTkOptionMenu(f_manual, values=["checkpoints", "loras", "vae", "controlnet"], width=120)
         self.option_type.pack(padx=10, pady=15, side="left")
-
         self.btn_dl = ctk.CTkButton(self.tab_dl, text="DOWNLOAD TARGET", command=self.start_download, height=45, fg_color="#3b8ed0", font=ctk.CTkFont(weight="bold"))
         self.btn_dl.pack(padx=20, pady=15, fill="x")
-
         self.log_acquisition = ctk.CTkTextbox(self.tab_dl, height=250, font=("Consolas", 12), fg_color="#0d0d0d", border_width=1, border_color="#333")
         self.log_acquisition.pack(padx=20, pady=10, fill="both", expand=True)
 
@@ -146,53 +136,36 @@ class App(ctk.CTk):
     def setup_training_tab(self):
         f_wizard = ctk.CTkFrame(self.tab_train, fg_color="#252525", corner_radius=10)
         f_wizard.pack(padx=20, pady=20, fill="x")
-        
         ctk.CTkLabel(f_wizard, text="DATASET WIZARD (AUTOMATED)", font=ctk.CTkFont(weight="bold")).pack(pady=10)
         self.entry_trigger = ctk.CTkEntry(f_wizard, placeholder_text="TRIGGER WORD", height=35)
         self.entry_trigger.pack(padx=20, pady=5, fill="x")
-        
         ctk.CTkButton(f_wizard, text="GENERATE DATASET STRUCTURE", command=self.dataset_wizard, fg_color="#4B0082").pack(pady=15)
-        
         self.log_train = ctk.CTkTextbox(self.tab_train, height=200, font=("Consolas", 11), fg_color="#0d0d0d")
         self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
 
     def setup_vault_tab(self):
-        # Bloco de Adição
         f_add = ctk.CTkFrame(self.tab_settings, fg_color="transparent")
         f_add.pack(padx=20, pady=20, fill="x")
-        
         ctk.CTkLabel(f_add, text="REGISTER NEW API KEY", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w")
         self.entry_api = ctk.CTkEntry(f_add, placeholder_text="Paste your Civitai API Key here...", show="*", height=40)
         self.entry_api.pack(pady=10, fill="x")
-        
         ctk.CTkButton(f_add, text="ADD TO VAULT", command=self.save_api_key, fg_color="#3b8ed0").pack(pady=5, fill="x")
-
-        # Bloco de Lista
         ctk.CTkLabel(self.tab_settings, text="SAVED CREDENTIALS", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray").pack(padx=20, anchor="w", pady=(20,5))
-        
         self.api_list_frame = ctk.CTkScrollableFrame(self.tab_settings, height=250, fg_color="#1a1a1a", border_width=1, border_color="#333")
         self.api_list_frame.pack(padx=20, pady=5, fill="both", expand=True)
-
-    # --- LÓGICA FUNCIONAL (GOD MODE) ---
 
     def apply_preset(self, choice):
         p = PRESET_MODELS.get(choice)
         if p and p["id"]:
-            self.entry_id.delete(0, "end")
-            self.entry_id.insert(0, p["id"])
-            self.option_type.set(p["type"])
+            self.entry_id.delete(0, "end"); self.entry_id.insert(0, p["id"]); self.option_type.set(p["type"])
 
     def refresh_api_ui(self):
-        for widget in self.api_list_frame.winfo_children():
-            widget.destroy()
-        
+        for widget in self.api_list_frame.winfo_children(): widget.destroy()
         for idx, key in enumerate(self.saved_apis):
             f = ctk.CTkFrame(self.api_list_frame, fg_color="#252525", pady=5)
             f.pack(fill="x", pady=2)
-            
             masked_key = f"{key[:8]}...{key[-4:]}"
             ctk.CTkLabel(f, text=f"🔑 Key {idx+1}: {masked_key}", font=("Consolas", 12)).pack(side="left", padx=15)
-            
             ctk.CTkButton(f, text="REMOVE", width=60, height=24, fg_color="#444", hover_color="#8b0000", 
                           command=lambda k=key: self.remove_api_key(k)).pack(side="right", padx=10)
 
@@ -203,18 +176,16 @@ class App(ctk.CTk):
             self.entry_api.delete(0, "end")
             self.persist_config()
             self.refresh_api_ui()
-            messagebox.showinfo("Vault", "Chave adicionada ao cofre com sucesso!")
+            messagebox.showinfo("Vault", "Chave salva com sucesso!")
 
     def remove_api_key(self, key):
         if key in self.saved_apis:
             self.saved_apis.remove(key)
-            self.persist_config()
-            self.refresh_api_ui()
+            self.persist_config(); self.refresh_api_ui()
 
     def persist_config(self):
         CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump({"api_keys": self.saved_apis}, f, indent=4)
+        with open(CONFIG_FILE, 'w') as f: json.dump({"api_keys": self.saved_apis}, f, indent=4)
 
     def load_config(self):
         if CONFIG_FILE.exists():
@@ -222,65 +193,24 @@ class App(ctk.CTk):
                 with open(CONFIG_FILE, 'r') as f:
                     data = json.load(f)
                     self.saved_apis = data.get("api_keys", [])
-                    # Legado
                     old_key = data.get("civitai_api_key")
-                    if old_key and old_key not in self.saved_apis:
-                        self.saved_apis.append(old_key)
+                    if old_key and old_key not in self.saved_apis: self.saved_apis.append(old_key)
                 self.refresh_api_ui()
             except: pass
 
-    def log(self, msg):
-        self.log_acquisition.insert("end", f"[{time.strftime('%H:%M:%S')}] {msg}\n")
-        self.log_acquisition.see("end")
-
-    def start_download(self):
-        m_id = self.entry_id.get().strip()
-        m_type = self.option_type.get()
-        if not m_id: return
-        threading.Thread(target=self.run_downloader, args=(m_id, m_type), daemon=True).start()
-
-    def run_downloader(self, m_id, m_type):
-        self.log(f"Iniciando requisição para ID: {m_id}")
-        py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
-        dl = get_short_path(TOOLS_DIR / "downloader.py")
-        
-        # Usar a última chave salva se existir
-        api_key = self.saved_apis[-1] if self.saved_apis else ""
-        
-        cmd = [str(py), str(dl), m_id, m_type]
-        env = os.environ.copy()
-        if api_key: env["CIVITAI_API_KEY"] = api_key
-
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
-        for line in proc.stdout: self.log(line.strip())
-        proc.wait()
-        self.after(500, self.refresh_models_list)
-
     def refresh_models_list(self):
         self.inv_list.delete("1.0", "end")
-        found = False
+        unique_models = set()
         if MODELS_DIR.exists():
             for root, dirs, files in os.walk(MODELS_DIR):
                 for f in files:
                     if f.endswith((".safetensors", ".ckpt")):
-                        self.inv_list.insert("end", f"● {f}\n")
-                        found = True
-        if not found: self.inv_list.insert("end", "Inventory Empty.")
-
-    def dataset_wizard(self):
-        trigger = self.entry_trigger.get().strip()
-        if not trigger: return
-        src = ctk.filedialog.askdirectory(title="SELECT SOURCE IMAGES")
-        if not src: return
-        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
-        dst.mkdir(parents=True, exist_ok=True)
-        import shutil
-        for i, f in enumerate(os.listdir(src)):
-            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                ext = os.path.splitext(f)[1]
-                shutil.copy2(os.path.join(src, f), dst / f"{trigger}_{i:03d}{ext}")
-                with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
-        messagebox.showinfo("Wizard", f"Dataset industrial criado em: {dst}")
+                        unique_models.add(f)
+            
+            for model in sorted(list(unique_models)):
+                self.inv_list.insert("end", f"● {model}\n")
+        
+        if not unique_models: self.inv_list.insert("end", "Inventory Empty.")
 
     def kill_port(self, port):
         try:
@@ -292,38 +222,27 @@ class App(ctk.CTk):
 
     def start_studio(self):
         if self.process is None:
-            self.kill_port(8188)
-            time.sleep(1)
+            self.kill_port(8188); time.sleep(1)
             main_py = ENGINE_DIR / "main.py"
             if not main_py.exists(): return
-            
             py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
-            args = [
-                str(py), str(main_py),
-                "--input-directory", str(BASE_DIR_PATH / "workspace/input"),
-                "--output-directory", str(BASE_DIR_PATH / "workspace/output"),
-                "--listen", "127.0.0.1", "--port", "8188", "--lowvram"
-            ]
-
+            args = [str(py), str(main_py), "--input-directory", str(BASE_DIR_PATH / "workspace/input"),
+                    "--output-directory", str(BASE_DIR_PATH / "workspace/output"), "--listen", "127.0.0.1", "--port", "8188", "--lowvram"]
             try:
                 if os.name == "nt":
                     flat_args = ' '.join([f'"{a}"' for a in args])
                     self.process = subprocess.Popen(f'start "AI CORE" cmd /k {flat_args}', shell=True, cwd=str(BASE_DIR_PATH))
                 else:
-                    # Stealth Mode Linux com log
                     log_f = open(ENGINE_DIR / "comfyui_stealth.log", "w")
                     self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(BASE_DIR_PATH))
-                self.log("Ignition successful. Core running.")
             except Exception as e: messagebox.showerror("Critical", str(e))
 
     def stop_studio(self):
         self.kill_port(8188)
         if self.process:
             try:
-                if os.name == "nt":
-                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
-                else:
-                    self.process.terminate()
+                if os.name == "nt": subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.process.pid)], capture_output=True)
+                else: self.process.terminate()
             except: pass
             self.process = None
         self.status_indicator.configure(text="● SYSTEM OFFLINE", text_color="#ff4444")
@@ -334,10 +253,35 @@ class App(ctk.CTk):
             online = s.connect_ex(('127.0.0.1', 8188)) == 0
             self.status_indicator.configure(text="● SYSTEM OPERATIONAL" if online else "● SYSTEM OFFLINE", 
                                             text_color="#44ff44" if online else "#ff4444")
-            s.close()
-            self.after(5000, check)
+            s.close(); self.after(5000, check)
         self.after(2000, check)
 
+    def dataset_wizard(self):
+        trigger = self.entry_trigger.get().strip()
+        if not trigger: return
+        src = ctk.filedialog.askdirectory(title="SELECT SOURCE IMAGES")
+        if not src: return
+        dst = BASE_DIR_PATH / "workspace/training_data" / trigger / "img" / f"15_{trigger}"
+        dst.mkdir(parents=True, exist_ok=True)
+        import shutil
+        for i, f in enumerate(os.listdir(src)):
+            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                ext = os.path.splitext(f)[1]; shutil.copy2(os.path.join(src, f), dst / f"{trigger}_{i:03d}{ext}")
+                with open(dst / f"{trigger}_{i:03d}.txt", "w") as tf: tf.write(trigger)
+        messagebox.showinfo("Wizard", f"Dataset industrial criado em: {dst}")
+
+    def start_download(self):
+        m_id = self.entry_id.get().strip(); m_type = self.option_type.get()
+        if m_id: threading.Thread(target=self.run_downloader, args=(m_id, m_type), daemon=True).start()
+
+    def run_downloader(self, m_id, m_type):
+        py = get_short_path(VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3"))
+        dl = get_short_path(TOOLS_DIR / "downloader.py"); api_key = self.saved_apis[-1] if self.saved_apis else ""
+        cmd = [str(py), str(dl), m_id, m_type]; env = os.environ.copy()
+        if api_key: env["CIVITAI_API_KEY"] = api_key
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
+        for line in proc.stdout: self.log_acquisition.insert("end", f"[{time.strftime('%H:%M:%S')}] {line.strip()}\n"); self.log_acquisition.see("end")
+        proc.wait(); self.after(500, self.refresh_models_list)
+
 if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+    app = App(); app.mainloop()
