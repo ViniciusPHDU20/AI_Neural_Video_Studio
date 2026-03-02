@@ -11,6 +11,7 @@ __pycache__/
 # Modelos (O usuário deve baixar ou linkar os dele)
 models/checkpoints/*.safetensors
 models/checkpoints/*.ckpt
+models/checkpoints/*.gguf
 models/loras/*.safetensors
 models/vae/*.safetensors
 models/controlnet/*.safetensors
@@ -33,3 +34,4 @@ engine/input/*
 engine/models/*
 engine/user/*
 tools/tagger_models/
+.core/

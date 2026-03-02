@@ -3,13 +3,16 @@
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
-echo "[*] Iniciando Command Center V3.0.0 (Enterprise Architecture)..."
+echo "[*] Iniciando Command Center V3.0.1 (Enterprise Architecture)..."
 
-if [ ! -f ".venv/bin/python3" ]; then
+if [ ! -f ".venv/bin/activate" ]; then
     echo "[!] Ambiente virtual não encontrado!"
     echo "[?] Rode o instalador em platforms/linux/Install-Linux.sh"
     exit 1
 fi
 
-# Rodar o launcher dentro da pasta core
-./.venv/bin/python3 core/launcher.py
+# Ativar o ambiente virtual
+source .venv/bin/activate
+
+# Rodar o launcher
+python3 core/launcher.py

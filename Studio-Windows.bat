@@ -2,7 +2,7 @@
 :: --- AI NEURAL VIDEO STUDIO - WINDOWS ENTRY POINT ---
 cd /d "%~dp0"
 
-echo [*] Iniciando Command Center V3.0.0 (Enterprise Architecture)...
+echo [*] Iniciando Command Center V3.0.1 (Enterprise Architecture)...
 
 if not exist .venv\Scripts\python.exe (
     echo [!] Ambiente virtual nao encontrado!

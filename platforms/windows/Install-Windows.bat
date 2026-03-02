@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title AI Neural Video Studio - Intelligence Installer V3.0.0
+title AI Neural Video Studio - Intelligence Installer V3.0.1
 echo ===================================================
 echo     INICIANDO INSTALACAO (ENTERPRISE ARCH)
 echo ===================================================
@@ -87,6 +87,6 @@ if not exist "workspace\input" mkdir workspace\input
 if not exist "workspace\output" mkdir workspace\output
 
 echo ===================================================
-echo [V] ESTUDIO V3.0.0 INSTALADO COM SUCESSO!
+echo [V] ESTUDIO V3.0.1 INSTALADO COM SUCESSO!
 echo ===================================================
 pause

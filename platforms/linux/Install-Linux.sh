@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- AI NEURAL VIDEO STUDIO - INSTALLER (LINUX V3.0.0) ---
+# --- AI NEURAL VIDEO STUDIO - INSTALLER (LINUX V3.0.1) ---
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$BASE_DIR"
 
@@ -51,6 +51,6 @@ if [ ! -d "engine/custom_nodes/ComfyUI-Manager" ]; then
 fi
 
 echo "==================================================="
-echo "[V] Instalação V3.0.0 Concluída!"
+echo "[V] Instalação V3.0.1 Concluída!"
 echo "Use './Studio-Linux.sh' para iniciar."
 echo "==================================================="

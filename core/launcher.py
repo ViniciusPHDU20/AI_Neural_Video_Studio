@@ -47,7 +47,7 @@ def check_venv():
 check_venv()
 
 # --- CONFIGURAÇÕES GLOBAIS ---
-VERSION = "3.0.0 (Enterprise Architecture)"
+VERSION = "3.0.1 (Enterprise Architecture)"
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
@@ -274,12 +274,22 @@ class App(ctk.CTk):
         if self.process: return
         self.kill_port(8188); time.sleep(1)
         gpu_f = GPU_DATABASE.get(self.detected_vendor, {}).get(self.active_profile, "").split()
-        py = get_short_path(VENV_PATH / ("bin/python3" if os.name != "nt" else "bin/python.exe"))
+        py = sys.executable
         args = [str(py), "-u", str(ENGINE_DIR / "main.py"), "--listen", "127.0.0.1", "--port", "8188", "--extra-model-paths-config", str(BASE_DIR_PATH / "config/extra_model_paths.yaml")] + gpu_f
         try:
             env = os.environ.copy(); env["PYTHONUNBUFFERED"] = "1"
-            log_f = open(ENGINE_LOG, "w")
-            self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(BASE_DIR_PATH), env=env)
+            env["VIRTUAL_ENV"] = str(VENV_PATH)
+            site_pkgs = f"{VENV_PATH}/lib/python3.11/site-packages"
+            env["PYTHONPATH"] = f"{site_pkgs}:{env.get('PYTHONPATH', '')}"
+            
+            if os.name == "nt": self.process = subprocess.Popen(f'start "AI CORE" cmd /k {" ".join(args)}', shell=True, cwd=str(ENGINE_DIR), env=env)
+            else: 
+                log_f = open(ENGINE_LOG, "w")
+                log_f.write(f"[*] EXECUTANDO: {' '.join(args)}\n")
+                log_f.write(f"[*] CWD: {ENGINE_DIR}\n")
+                log_f.write(f"[*] ENV PYTHONPATH: {env['PYTHONPATH']}\n")
+                log_f.flush()
+                self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(ENGINE_DIR), env=env)
         except Exception as e: messagebox.showerror("Error", str(e))
 
     def stop_studio(self):
