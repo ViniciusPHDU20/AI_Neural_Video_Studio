@@ -1,5 +1,5 @@
 comfyui:
-    base_path: ./models
+    base_path: /home/viniciusphdu/NET/PROJETOS_GITHUB/AI_Neural_Video_Studio/models
     checkpoints: checkpoints
     loras: loras
     vae: vae
@@ -7,3 +7,4 @@ comfyui:
     controlnet: controlnet
     clip: clip
     diffusion_models: diffusion_models
+    unet: unet

@@ -1,29 +1,42 @@
-# AI Neural Video Studio
+# AI Neural Video Studio (Enterprise V4.0.5)
 
-A high-performance, portable environment for advanced video synthesis and photorealistic image generation. This suite provides a unified Command Center to manage complex AI workflows with a focus on stability, speed, and ease of deployment across Windows and Linux.
+Uma suíte de produção de vídeo neural de alta performance, projetada para orquestrar fluxos de trabalho do ComfyUI com uma interface moderna e gestão automatizada de ativos.
 
-## 🛠️ Key Components
-- **Command Center:** A modern, Dark-Mode GUI for engine control and asset management.
-- **Portable Architecture:** Decoupled engine and workspace, allowing for zero-config movement between drives or machines.
-- **Automated Infiltration:** Integrated downloader for high-fidelity models and research checkpoints.
-- **Production Blueprints:** Optimized JSON workflows for cinematic video and high-resolution upscaling.
+![Status](https://img.shields.io/badge/Status-Stable-green) ![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-blue)
 
-## 🚀 Quick Start
+## 🚀 Funcionalidades (God Mode)
+*   **Command Center:** Interface unificada para iniciar Engine, monitorar hardware (VRAM/RAM) e gerenciar downloads.
+*   **Smart Blueprints:** Injeção de workflows JSON complexos (Wan 2.1, Pony XL) com um único clique.
+*   **Acquisition Automático:** Baixe modelos do Hugging Face e Civitai sem sair do app.
+*   **Vault Seguro:** Gerenciamento criptografado de chaves de API.
 
-### Windows
-1. Run `Install-Windows.bat` (Requires Python 3.10+).
-2. Launch via `launcher.py`.
+## 🛠️ Instalação
 
-### Linux
-1. Run `Install-Linux.sh`.
-2. Launch via `launcher.py`.
+### Linux (Arch/Debian/Ubuntu)
+```bash
+chmod +x Install-Linux.sh
+./Install-Linux.sh
+./Studio-Linux.sh
+```
 
-## 📜 Credits & Acknowledgments
-This project is built upon the incredible work of the open-source AI community:
-- **Core Engine:** [ComfyUI](https://github.com/comfyanonymous/ComfyUI) by comfyanonymous.
-- **Management:** [ComfyUI-Manager](https://github.com/ltdrdata/ComfyUI-Manager) by ltdrdata.
-- **GUI Framework:** [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by TomSchimansky.
-- **Base Models:** Stability AI (SDXL) and the Pony Diffusion research community.
+### Windows (10/11)
+Execute `Install-Windows.bat` (Como Administrador recomendado para links simbólicos).
+Execute `Studio-Windows.bat` para iniciar.
 
-## ⚖️ License
-Distributed for research and artistic content generation purposes. Ensure compliance with model-specific licenses (e.g., CreativeML Open RAIL-M) when deploying assets.
+## 🎮 Como Usar
+
+1.  **Inicie o Studio:** Clique em `LAUNCH STUDIO`. Aguarde o indicador ficar **ONLINE**.
+2.  **Baixe Modelos:** Vá na aba **ACQUISITION**, escolha um preset (ex: `Wan 2.1 T2V`) e clique em `START DOWNLOAD`.
+3.  **Ative o Fluxo:** 
+    *   Vá na aba **BLUEPRINTS**.
+    *   Clique em `⚡ DEPLOY: wan2.1...`.
+    *   Acompanhe o processo no **CONSOLE** e na aba **GALLERY**.
+
+## 📦 Modelos Suportados (Presets)
+O sistema já vem configurado para baixar automaticamente:
+*   **Wan 2.1 (14B GGUF):** Estado da arte em geração de vídeo (Text-to-Video e Image-to-Video).
+*   **Pony XL:** Base robusta para geração de imagens estáticas.
+*   **T5 Encoder & VAE:** Componentes essenciais pré-configurados.
+
+## ⚖️ Licença
+Distribuído sob licença MIT. Os modelos baixados possuem suas próprias licenças (CreativeML, Apache 2.0, etc.).

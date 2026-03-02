@@ -1,37 +1,22 @@
-# AI Neural Video Studio - Git Ignore
-# Não queremos subir arquivos pesados ou privados
-
-# Python
+# --- Security & Secrets ---
+config/vault.json
+config/user_config.json
+.env
 __pycache__/
 *.py[cod]
-*$py.class
-.venv/
-.env
 
-# Modelos (O usuário deve baixar ou linkar os dele)
-models/checkpoints/*.safetensors
-models/checkpoints/*.ckpt
-models/checkpoints/*.gguf
-models/loras/*.safetensors
-models/vae/*.safetensors
-models/controlnet/*.safetensors
-models/upscalers/*.safetensors
-models/clip/*.safetensors
-models/diffusion_models/*.safetensors
-
-# Usuário e Log
-config/user_config.json
-config/vault.json
+# --- Heavy Assets (Too big for GitHub) ---
+models/checkpoints/*
+models/loras/*
+models/vae/*
+models/clip/*
+models/unet/*
+models/upscalers/*
 workspace/output/*
-workspace/input/*
-workspace/temp/*
-*.log
 
-# Engine interna (Opcional: Se quiser que o usuário clone a engine separadamente, mas vamos incluir a engine limpa)
-engine/.git/
-engine/output/*
-engine/input/*
-engine/models/*
-engine/user/*
-tools/tagger_models/
-.core/
+# --- Environment ---
+.venv/
+venv/
+.idea/
+.vscode/
+*.log

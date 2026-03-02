@@ -1,0 +1,113 @@
+{
+    "1": {
+        "inputs": {
+            "unet_name": "wan2.1-t2v-14b-Q4_K_M.gguf"
+        },
+        "class_type": "UnetLoaderGGUF",
+        "_meta": {
+            "title": "Unet Loader (GGUF)"
+        }
+    },
+    "2": {
+        "inputs": {
+            "text": "cinematic close-up of a futuristic android face, intricate details, neon lights, 4k, hyperrealistic",
+            "clip": [
+                "3",
+                0
+            ]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": {
+            "title": "CLIP Text Encode (Prompt)"
+        }
+    },
+    "3": {
+        "inputs": {
+            "clip_name": "t5-v1_1-xxl-encoder-Q4_K_M.gguf",
+            "type": "sd3"
+        },
+        "class_type": "DualCLIPLoaderGGUF",
+        "_meta": {
+            "title": "DualCLIP Loader (GGUF)"
+        }
+    },
+    "4": {
+        "inputs": {
+            "seed": 42,
+            "steps": 20,
+            "cfg": 7,
+            "sampler_name": "euler",
+            "scheduler": "normal",
+            "denoise": 1,
+            "model": [
+                "1",
+                0
+            ],
+            "positive": [
+                "2",
+                0
+            ],
+            "negative": [
+                "2",
+                0
+            ],
+            "latent_image": [
+                "5",
+                0
+            ]
+        },
+        "class_type": "KSampler",
+        "_meta": {
+            "title": "KSampler"
+        }
+    },
+    "5": {
+        "inputs": {
+            "width": 512,
+            "height": 512,
+            "batch_size": 1
+        },
+        "class_type": "EmptyLatentImage",
+        "_meta": {
+            "title": "Empty Latent Image"
+        }
+    },
+    "6": {
+        "inputs": {
+            "samples": [
+                "4",
+                0
+            ],
+            "vae": [
+                "7",
+                0
+            ]
+        },
+        "class_type": "VAEDecode",
+        "_meta": {
+            "title": "VAE Decode"
+        }
+    },
+    "7": {
+        "inputs": {
+            "vae_name": "Wan2_1_VAE_fp32.safetensors"
+        },
+        "class_type": "VAELoader",
+        "_meta": {
+            "title": "VAE Loader"
+        }
+    },
+    "8": {
+        "inputs": {
+            "filename_prefix": "Studio_Wan21",
+            "images": [
+                "6",
+                0
+            ]
+        },
+        "class_type": "SaveImage",
+        "_meta": {
+            "title": "Save Image"
+        }
+    }
+}

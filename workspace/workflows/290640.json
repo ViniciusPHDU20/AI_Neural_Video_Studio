@@ -1,0 +1,28 @@
+{
+    "nodes": [
+        {
+            "id": 1,
+            "type": "CheckpointLoaderSimple",
+            "pos": [10, 10],
+            "size": {"0": 315, "1": 110},
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [{"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}],
+            "widgets_values": ["290640.safetensors"]
+        },
+        {
+            "id": 2,
+            "type": "CLIPTextEncode",
+            "pos": [350, 10],
+            "size": {"0": 425, "1": 180},
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "widgets_values": ["score_9, score_8_up, score_7_up, masterpiece, 1girl, realistic, high quality, cinemastic lighting"]
+        }
+    ],
+    "links": [[1, 1, 0, 5, 0, "MODEL"]],
+    "version": 0.4
+}

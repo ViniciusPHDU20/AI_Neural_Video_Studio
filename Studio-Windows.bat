@@ -1,15 +1,22 @@
 @echo off
-:: --- AI NEURAL VIDEO STUDIO - WINDOWS ENTRY POINT ---
-cd /d "%~dp0"
+TITLE AI NEURAL VIDEO STUDIO - COMMAND CENTER
+COLOR 0A
 
-echo [*] Iniciando Command Center V3.0.1 (Enterprise Architecture)...
+:: --- PATH CONFIGURATION ---
+SET "BASE_DIR=%~dp0"
+SET "VENV_DIR=%BASE_DIR%.venv"
+SET "PYTHON=%VENV_DIR%\Scripts\python.exe"
+SET "LAUNCHER=%BASE_DIR%core\launcher.py"
 
-if not exist .venv\Scripts\python.exe (
-    echo [!] Ambiente virtual nao encontrado!
-    echo [?] Rode o instalador em platforms\windows\Install-Windows.bat
-    pause
-    exit /b 1
+:: --- CHECKS ---
+IF NOT EXIST "%PYTHON%" (
+    ECHO [X] CRITICAL ERROR: Virtual Environment not found!
+    ECHO [!] Please run Install-Windows.bat first.
+    PAUSE
+    EXIT /B
 )
 
-:: Rodar o launcher dentro da pasta core
-start "" ".venv\Scripts\python.exe" "core\launcher.py"
+:: --- LAUNCH ---
+ECHO [*] Launching Neural Studio Enterprise...
+"%PYTHON%" "%LAUNCHER%"
+PAUSE

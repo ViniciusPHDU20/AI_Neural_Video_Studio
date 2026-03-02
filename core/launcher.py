@@ -1,440 +1,353 @@
-import os
-import sys
-import subprocess
-import ctypes
+import os, sys, subprocess, ctypes, threading, json, socket, time, re, requests
 from pathlib import Path
-import tkinter as tk
-import customtkinter as ctk
-import threading
-import json
-import socket
-import shutil
-import time
-import re
-import struct
-try:
-    import psutil
-except ImportError:
-    psutil = None
+try: import psutil
+except: psutil = None
 from tkinter import messagebox
 from PIL import Image
-import webbrowser
+import customtkinter as ctk
 
-# --- AMBIENTE E CAMINHOS ---
-BASE_DIR = Path(__file__).parent.parent.absolute()
+# --- ENVIRONMENT & PATHS ---
+FILE_PATH = Path(__file__).resolve()
+BASE_DIR = FILE_PATH.parent.parent
+VENV_PATH = BASE_DIR / ".venv"
+VERSION = "4.0.5 (Enterprise Stabilized)"
+ctk.set_appearance_mode("Dark"); ctk.set_default_color_theme("dark-blue")
 
-def get_short_path(path):
-    if os.name == "nt":
-        try:
-            output_buf = ctypes.create_unicode_buffer(1024)
-            ctypes.windll.kernel32.GetShortPathNameW(str(path), output_buf, 1024)
-            return output_buf.value
-        except: return str(path)
-    return str(path)
-
-BASE_DIR_PATH = Path(get_short_path(BASE_DIR))
-VENV_PATH = BASE_DIR_PATH / ".venv"
-
-def check_venv():
-    if hasattr(sys, 'real_prefix') or (sys.base_prefix != sys.prefix): return
-    venv_python = VENV_PATH / ("Scripts/python.exe" if os.name == "nt" else "bin/python3")
-    if venv_python.exists():
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
-        subprocess.Popen([str(venv_python)] + sys.argv, env=env)
-        sys.exit(0)
-
-check_venv()
-
-# --- CONFIGURAÇÕES GLOBAIS ---
-VERSION = "3.0.1 (Enterprise Architecture)"
-ctk.set_appearance_mode("Dark")
-ctk.set_default_color_theme("blue")
-
-SCRIPTS_DIR = BASE_DIR_PATH / "scripts"
-TOOLS_DIR = BASE_DIR_PATH / "tools"
-ENGINE_DIR = BASE_DIR_PATH / "engine"
-MODELS_DIR = BASE_DIR_PATH / "models"
-CONFIG_FILE = BASE_DIR_PATH / "config" / "user_config.json"
-VAULT_FILE = BASE_DIR_PATH / "config" / "vault.json"
-WORKFLOWS_DIR = BASE_DIR_PATH / "workspace" / "workflows"
-OUTPUT_DIR = BASE_DIR_PATH / "workspace" / "output"
+ENGINE_DIR, MODELS_DIR = BASE_DIR / "engine", BASE_DIR / "models"
+CONFIG_DIR, WORKSPACE_DIR, TOOLS_DIR = BASE_DIR / "config", BASE_DIR / "workspace", BASE_DIR / "tools"
+CONFIG_FILE, VAULT_FILE = CONFIG_DIR / "user_config.json", CONFIG_DIR / "vault.json"
+OUTPUT_DIR, WORKFLOWS_DIR = WORKSPACE_DIR / "output", WORKSPACE_DIR / "workflows"
 ENGINE_LOG = ENGINE_DIR / "comfyui_stealth.log"
-TEMP_DIR = BASE_DIR_PATH / "workspace" / "temp"
 
 GPU_DATABASE = {
-    "NVIDIA": {
-        "RTX 3060 Ti / 4060 (8GB)": "--normalvram --use-split-cross-attention --fp8_e4m3fn-text-enc",
-        "RTX 3060 / 4060 Ti (12GB-16GB)": "--gpu-only --use-split-cross-attention --fp16-vae",
-        "RTX 3090 / 4090 (24GB)": "--gpu-only --highvram --use-split-cross-attention --fp16-vae",
-        "RTX 2060 / 3050 (4GB-6GB)": "--lowvram --fp8_e4m3fn-text-enc --disable-xformers",
-        "GTX Series (Sem Tensor Cores)": "--lowvram --fp16-vae --disable-xformers"
-    },
-    "AMD": {
-        "RX 6700 XT / 6750 XT (12GB)": "--directml --normalvram --fp8_e4m3fn-text-enc",
-        "RX 7900 XT / XTX (20GB+)": "--directml --highvram --fp16-vae",
-        "RX 580 / 6600 (4GB-8GB)": "--directml --lowvram --fp8_e4m3fn-text-enc"
-    },
-    "CPU / INTEGRATED": {"Integrated / Basic": "--cpu"}
+    "NVIDIA": {"RTX 3060 Ti / 4060 (8GB)": "--normalvram --use-split-cross-attention --fp8_e4m3fn-text-enc", "High-End (12GB+)": "--gpu-only --use-split-cross-attention"},
+    "AMD": {"RX Series": "--directml --normalvram"}, "CPU": {"Basic": "--cpu"}
 }
-
-RAM_PROFILES = {"Performance (Max RAM)": "", "Balanced (Padrao)": "--normalvram", "Extreme Saver": "--lowvram"}
+RAM_PROFILES = {"Max Performance": "", "Balanced (Standard)": "--normalvram", "Economy Saver": "--lowvram"}
 
 PRESET_MODELS = {
-    "● [BASE] Pony Diffusion V6 XL": {"id": "290640", "type": "checkpoints", "source": "civitai"},
-    "● [BASE] RealVisXL V4.0 (Photo)": {"id": "139562", "type": "checkpoints", "source": "civitai"},
-    "● [ANIME] MaouBig V1.2 (Demon)": {"id": "164827", "type": "checkpoints", "source": "civitai"},
-    "● [VIDEO] Wan 2.2 T2V (14B GGUF)": {"repo": "city96/Wan2.1-T2V-14B-gguf", "file": "wan2.1-t2v-14b-Q4_K_M.gguf", "type": "checkpoints", "source": "hf"},
-    "● [VIDEO] Wan 2.2 I2V (14B GGUF)": {"repo": "city96/Wan2.1-I2V-14B-720P-gguf", "file": "wan2.1-i2v-14b-720p-Q4_K_M.gguf", "type": "checkpoints", "source": "hf"},
-    "● [VIDEO] LTX-Video (High Quality)": {"repo": "Lightricks/LTX-Video", "file": "ltx-video-2b-v0.9.safetensors", "type": "checkpoints", "source": "hf"},
-    "● [LORA] Realistic Skin Details": {"id": "356417", "type": "loras", "source": "civitai"},
-    "● [VAE] SDXL Official VAE": {"id": "290640", "type": "vae", "source": "civitai"}
+    "● [VIDEO] Wan 2.1 T2V (GGUF)": {"repo": "city96/Wan2.1-T2V-14B-gguf", "file": "wan2.1-t2v-14b-Q4_K_M.gguf", "type": "checkpoints", "source": "hf"},
+    "● [VIDEO] Wan 2.1 I2V (GGUF)": {"repo": "city96/Wan2.1-I2V-14B-720P-gguf", "file": "wan2.1-i2v-14b-720p-Q4_K_M.gguf", "type": "checkpoints", "source": "hf"},
+    "● [CORE] T5 Encoder (GGUF)": {"repo": "city96/t5-v1_1-xxl-encoder-gguf", "file": "t5-v1_1-xxl-encoder-Q4_K_M.gguf", "type": "clip", "source": "hf"},
+    "● [CORE] VAE Wan 2.1": {"repo": "Kijai/WanVideo_comfy", "file": "Wan2_1_VAE_fp32.safetensors", "type": "vae", "source": "hf"},
+    "● [STYLE] MaouBig V1.2 (Anime)": {"id": "164827", "type": "checkpoints", "source": "civitai"},
+    "● [BASE] Pony XL": {"id": "290640", "type": "checkpoints", "source": "civitai"}
 }
 
 class App(ctk.CTk):
     def __init__(self):
-        super().__init__()
-
-        self.title(f"AI NEURAL VIDEO STUDIO | {VERSION}")
-        self.geometry("1400x950")
+        super().__init__(); self.title(f"AI STUDIO | {VERSION}"); self.geometry("1450x920")
+        self.process, self.saved_apis, self.console_active = None, [], True
+        self.detected_vendor, self.active_profile, self.active_model_path = "CPU", "", None
+        self.active_ram_profile, self.active_preset, self.active_wf_path = "Balanced (Standard)", {}, None
         
-        # Atributos de Estado
-        self.process = None
-        self.saved_apis = []
-        self.env_profiles = {}
-        self.console_active = True
-        self.detected_vendor = "CPU / INTEGRATED"
-        self.active_profile = ""
-        self.expert_flags = ""
-        self.active_preset = {}
-        self.active_ram_profile = "Balanced (Padrao)"
-        self.active_model_path = None
-
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-        # Sidebar
-        self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=0)
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        ctk.CTkLabel(self.sidebar, text="AI STUDIO", font=("Orbitron", 24, "bold"), text_color="#3498db").pack(pady=30)
-        self.btn_studio = ctk.CTkButton(self.sidebar, text="LAUNCH STUDIO", command=self.start_studio, height=45, fg_color="#27ae60", hover_color="#2ecc71").pack(pady=10, padx=20)
-        self.btn_stop = ctk.CTkButton(self.sidebar, text="STOP SYSTEM", command=self.stop_studio, height=45, fg_color="#c0392b", hover_color="#e74c3c").pack(pady=5, padx=20)
-        self.status_indicator = ctk.CTkLabel(self.sidebar, text="● SYSTEM OFFLINE", text_color="#ff4444", font=("Consolas", 12)); self.status_indicator.pack(pady=20)
-
-        # Telemetria UI
-        tel_f = ctk.CTkFrame(self.sidebar, fg_color="#111", corner_radius=10); tel_f.pack(padx=20, pady=10, fill="x")
-        self.lbl_vram = ctk.CTkLabel(tel_f, text="VRAM: -- MB", font=("Consolas", 11)); self.lbl_vram.pack(pady=2)
-        self.lbl_cpu = ctk.CTkLabel(tel_f, text="CPU: -- %", font=("Consolas", 11)); self.lbl_cpu.pack(pady=2)
-        self.lbl_swap = ctk.CTkLabel(tel_f, text="SWAP: -- %", font=("Consolas", 11)); self.lbl_swap.pack(pady=2)
-        self.lbl_disk = ctk.CTkLabel(tel_f, text="DISK: -- GB", font=("Consolas", 11)); self.lbl_disk.pack(pady=2)
-
-        # Tabs Setup
-        self.tabs = ctk.CTkTabview(self, corner_radius=15, border_width=1, border_color="#333")
-        self.tabs.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
-        self.tab_acq = self.tabs.add("ACQUISITION"); self.tab_gal = self.tabs.add("GALLERY"); self.tab_canvas = self.tabs.add("CANVAS")
-        self.tab_train = self.tabs.add("TRAINING"); self.tab_vault = self.tabs.add("VAULT"); self.tab_opt = self.tabs.add("OPTIMIZER"); self.tab_log = self.tabs.add("CONSOLE")
-
-        self.setup_acq_tab(); self.setup_gal_tab(); self.setup_canvas_tab(); self.setup_training_tab()
-        self.setup_vault_tab(); self.setup_optimizer_tab(); self.setup_console_tab()
-
+        self.grid_columnconfigure(1, weight=1); self.grid_rowconfigure(0, weight=1)
+        self.sidebar = ctk.CTkFrame(self, width=250, fg_color="#0b0b0b"); self.sidebar.grid(row=0, column=0, sticky="nsew")
+        ctk.CTkLabel(self.sidebar, text="NEURAL STUDIO", font=("Orbitron", 22, "bold"), text_color="#00a8ff").pack(pady=30)
+        self.btn_studio = ctk.CTkButton(self.sidebar, text="LAUNCH STUDIO", command=self.start_studio, fg_color="#27ae60", font=("Roboto", 14, "bold")); self.btn_studio.pack(pady=10, padx=20, fill="x")
+        self.btn_stop = ctk.CTkButton(self.sidebar, text="STOP ENGINE", command=self.stop_studio, fg_color="#c0392b"); self.btn_stop.pack(pady=5, padx=20, fill="x")
+        self.status_indicator = ctk.CTkLabel(self.sidebar, text="● OFFLINE", font=("Consolas", 12), text_color="#ff4444"); self.status_indicator.pack(pady=10)
+        
+        self.setup_telemetry_ui()
+        self.tabs = ctk.CTkTabview(self); self.tabs.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
+        self.tab_acq = self.tabs.add("ACQUISITION"); self.tab_blue = self.tabs.add("BLUEPRINTS"); self.tab_gal = self.tabs.add("GALLERY")
+        self.tab_vault = self.tabs.add("VAULT"); self.tab_opt = self.tabs.add("OPTIMIZER"); self.tab_log = self.tabs.add("CONSOLE")
+        
+        self.setup_acq_tab(); self.setup_blueprints_tab(); self.setup_gal_tab(); self.setup_vault_tab(); self.setup_optimizer_tab(); self.setup_console_tab()
         self.load_vault(); self.load_config(); self.detect_hardware(); self.start_loops()
+        self.after(1000, self.refresh_models_list); self.after(1500, self.refresh_gallery); self.after(2000, self.refresh_blueprints)
+
+    def setup_telemetry_ui(self):
+        f = ctk.CTkFrame(self.sidebar, fg_color="#151515", corner_radius=10); f.pack(padx=10, pady=10, fill="x", side="bottom")
+        self.lbl_vram = ctk.CTkLabel(f, text="VRAM: -- MB", text_color="#00a8ff"); self.lbl_vram.pack()
+        self.lbl_ram = ctk.CTkLabel(f, text="RAM: -- %", text_color="#e1b12c"); self.lbl_ram.pack()
+        self.lbl_cpu = ctk.CTkLabel(f, text="CPU: -- %", text_color="#e1b12c"); self.lbl_cpu.pack()
+        self.lbl_disk = ctk.CTkLabel(f, text="DISK: -- GB", text_color="#4cd137"); self.lbl_disk.pack()
 
     def setup_acq_tab(self):
         f = ctk.CTkFrame(self.tab_acq, fg_color="transparent"); f.pack(fill="both", expand=True, padx=20, pady=20)
-        ctk.CTkLabel(f, text="PRESET MODELS", font=("Orbitron", 14, "bold")).grid(row=0, column=0, sticky="w", pady=10)
-        self.preset_menu = ctk.CTkOptionMenu(f, values=list(PRESET_MODELS.keys()), command=self.apply_preset, width=400, height=35); self.preset_menu.grid(row=1, column=0, sticky="w", padx=5)
-        ctk.CTkLabel(f, text="MANUAL ACQUISITION (ID / REPO)", font=("Orbitron", 14, "bold")).grid(row=2, column=0, sticky="w", pady=20)
-        self.entry_id = ctk.CTkEntry(f, placeholder_text="Civitai ID or HF Repo/File", width=400, height=35); self.entry_id.grid(row=3, column=0, sticky="w", padx=5)
-        self.option_type = ctk.CTkOptionMenu(f, values=["checkpoints", "loras", "vae", "upscalers", "controlnet"], width=150, height=35); self.option_type.grid(row=3, column=1, padx=10)
-        ctk.CTkButton(f, text="START DOWNLOAD", command=self.start_download, height=45, fg_color="#3498db").grid(row=4, column=0, columnspan=2, pady=30, sticky="ew")
-        self.inv_scroll = ctk.CTkScrollableFrame(f, width=500, height=500, fg_color="#050505"); self.inv_scroll.grid(row=1, column=2, rowspan=10, padx=40, sticky="nsew")
-        self.lbl_inv_total = ctk.CTkLabel(f, text="Total: 0 GB", font=("Consolas", 12)); self.lbl_inv_total.grid(row=11, column=2, sticky="e", padx=40)
-        self.txt_meta = ctk.CTkTextbox(f, height=150, width=400, font=("Consolas", 11), fg_color="#111"); self.txt_meta.grid(row=5, column=0, columnspan=2, pady=10, sticky="nsew")
-        ctk.CTkButton(f, text="DELETE SELECTED MODEL", command=self.delete_model_action, height=40, fg_color="#c0392b", hover_color="#e74c3c").grid(row=6, column=0, columnspan=2, pady=5, sticky="ew")
-        ctk.CTkButton(f, text="REFRESH LIST", command=self.refresh_models_list).grid(row=12, column=2, sticky="ew", padx=40, pady=10)
+        l = ctk.CTkFrame(f, fg_color="transparent"); l.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        ctk.CTkLabel(l, text="ACQUISITION CENTER", font=("Orbitron", 18, "bold"), text_color="#00a8ff").pack(anchor="w", pady=(0, 20))
+        self.preset_menu = ctk.CTkOptionMenu(l, values=list(PRESET_MODELS.keys()), command=self.apply_preset, height=45); self.preset_menu.pack(pady=10, fill="x")
+        self.entry_id = ctk.CTkEntry(l, placeholder_text="Model ID or Repo Path", height=45); self.entry_id.pack(pady=5, fill="x")
+        self.option_type = ctk.CTkOptionMenu(l, values=["checkpoints", "loras", "vae", "clip", "unet"], height=45); self.option_type.pack(pady=5, fill="x")
+        ctk.CTkButton(l, text="START DOWNLOAD", command=self.start_download, fg_color="#0097e6", height=55, font=("Roboto", 14, "bold")).pack(pady=20, fill="x")
+        self.btn_deploy = ctk.CTkButton(l, text="INJECT BLUEPRINT", command=self.inject_active_workflow, fg_color="#8e44ad", height=55, state="disabled", font=("Roboto", 14, "bold")); self.btn_deploy.pack(pady=5, fill="x")
+        
+        r = ctk.CTkFrame(f, fg_color="#0f0f0f", corner_radius=15); r.pack(side="right", fill="both", expand=True)
+        self.inv_scroll = ctk.CTkScrollableFrame(r, label_text="LOCAL ARSENAL", fg_color="transparent"); self.inv_scroll.pack(fill="both", expand=True, padx=10, pady=10)
+        self.txt_meta = ctk.CTkTextbox(r, height=120, font=("Consolas", 11), fg_color="#000", text_color="#3ae374"); self.txt_meta.pack(fill="x", padx=10, pady=5)
+        ctk.CTkButton(r, text="REMOVE ASSET", command=self.delete_model_action, fg_color="#c0392b").pack(pady=10, padx=10, fill="x")
+
+    def setup_blueprints_tab(self):
+        self.blue_scroll = ctk.CTkScrollableFrame(self.tab_blue, label_text="PRODUCTION BLUEPRINTS", fg_color="transparent")
+        self.blue_scroll.pack(fill="both", expand=True, padx=20, pady=20)
+        ctk.CTkButton(self.tab_blue, text="REFRESH BLUEPRINTS", command=self.refresh_blueprints).pack(pady=10)
 
     def setup_gal_tab(self):
-        f_main = ctk.CTkFrame(self.tab_gal, fg_color="transparent"); f_main.pack(fill="both", expand=True)
-        self.gal_list = ctk.CTkScrollableFrame(f_main, width=300, fg_color="#050505"); self.gal_list.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        self.f_gal_view = ctk.CTkFrame(f_main, fg_color="#111", corner_radius=15, border_width=1, border_color="#333"); self.f_gal_view.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        self.lbl_gal_img = ctk.CTkLabel(self.f_gal_view, text="Select asset", width=500, height=500, fg_color="#050505"); self.lbl_gal_img.pack(padx=20, pady=20)
-        self.txt_gal_meta = ctk.CTkTextbox(self.f_gal_view, height=200, font=("Consolas", 11), fg_color="transparent"); self.txt_gal_meta.pack(padx=20, pady=10, fill="both", expand=True)
-        ctk.CTkButton(self.tab_gal, text="REFRESH GALLERY", command=self.refresh_gallery, height=40).pack(pady=10)
-
-    def setup_canvas_tab(self):
-        f_main = ctk.CTkFrame(self.tab_canvas, fg_color="transparent"); f_main.pack(fill="both", expand=True)
-        self.canvas_list = ctk.CTkTextbox(f_main, font=("Consolas", 12), fg_color="#050505", width=600); self.canvas_list.pack(side="left", padx=20, pady=20, fill="both", expand=True)
-        ctk.CTkButton(self.tab_canvas, text="REFRESH", command=self.refresh_canvas, height=40).pack(pady=10)
-
-    def setup_training_tab(self):
-        f = ctk.CTkFrame(self.tab_train, fg_color="#1a1a1a", corner_radius=10); f.pack(padx=20, pady=10, fill="x")
-        self.train_base_model = ctk.CTkEntry(f, placeholder_text="BASE MODEL PATH", height=35); self.train_base_model.pack(padx=20, pady=5, fill="x")
-        self.train_lora_name = ctk.CTkEntry(f, placeholder_text="OUTPUT LORA NAME", height=35); self.train_lora_name.pack(padx=20, pady=5, fill="x")
-        self.entry_trigger = ctk.CTkEntry(f, placeholder_text="TRIGGER WORD", height=35); self.entry_trigger.pack(padx=20, pady=5, fill="x")
-        ctk.CTkButton(self.tab_train, text="START TRAINING", command=self.start_training, fg_color="#FF8C00", height=50).pack(padx=20, pady=10, fill="x")
-        self.log_train = ctk.CTkTextbox(self.tab_train, height=200, font=("Consolas", 11), fg_color="#050505"); self.log_train.pack(padx=20, pady=10, fill="both", expand=True)
-
-    def setup_console_tab(self):
-        self.console_box = ctk.CTkTextbox(self.tab_log, font=("Consolas", 11), fg_color="#050505", text_color="#44ff44"); self.console_box.pack(padx=20, pady=20, fill="both", expand=True)
-
-    def setup_optimizer_tab(self):
-        f = ctk.CTkFrame(self.tab_opt, fg_color="#1a1a1a", corner_radius=15, border_width=1, border_color="#333"); f.pack(padx=40, pady=20, fill="both", expand=True)
-        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detectando..."], command=self.set_profile, width=450, height=40); self.gpu_picker.pack(pady=5)
-        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=self.set_ram_profile, width=450, height=40); self.ram_menu.pack(pady=5)
-        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Expert Flags...", height=45, width=450); self.entry_expert.pack(pady=5)
-        self.entry_expert.bind("<KeyRelease>", self.update_expert_flags)
-        self.lbl_flags = ctk.CTkLabel(f, text="Flags Active: ---", font=("Consolas", 10), text_color="#444", wraplength=600); self.lbl_flags.pack(pady=25)
+        f = ctk.CTkFrame(self.tab_gal, fg_color="transparent"); f.pack(fill="both", expand=True)
+        self.gal_list = ctk.CTkScrollableFrame(f, width=300, fg_color="#0f0f0f"); self.gal_list.pack(side="left", fill="y", padx=10, pady=10)
+        pv = ctk.CTkFrame(f, fg_color="#000", corner_radius=15); pv.pack(side="right", fill="both", expand=True, padx=10, pady=10)
+        self.lbl_gal_img = ctk.CTkLabel(pv, text="PREVIEW VIEWPORT", text_color="#444", font=("Roboto", 16)); self.lbl_gal_img.pack(expand=True)
+        ctk.CTkButton(self.gal_list, text="REFRESH GALLERY", command=self.refresh_gallery, fg_color="#2c3e50").pack(fill="x", pady=10, padx=10)
 
     def setup_vault_tab(self):
-        f = ctk.CTkFrame(self.tab_vault, fg_color="transparent"); f.pack(padx=30, pady=30, fill="both", expand=True)
-        self.api_provider = ctk.CTkOptionMenu(f, values=["Civitai (API Key)", "Hugging Face (Token)"], height=40); self.api_provider.pack(fill="x", pady=5)
-        self.entry_api = ctk.CTkEntry(f, placeholder_text="Paste Key/Token here...", show="*", height=45); self.entry_api.pack(fill="x", pady=10)
-        ctk.CTkButton(f, text="AUTHORIZE & SAVE", command=self.save_api_key, height=45, fg_color="#2c3e50", hover_color="#34495e").pack(fill="x", pady=10)
-        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="AUTHORIZED VAULT", fg_color="#0d0d0d"); self.api_list_frame.pack(fill="both", expand=True, pady=20)
+        f = ctk.CTkFrame(self.tab_vault, fg_color="transparent"); f.pack(padx=50, pady=50, fill="both", expand=True)
+        ctk.CTkLabel(f, text="SECURE VAULT", font=("Orbitron", 22, "bold"), text_color="#e1b12c").pack(pady=30)
+        self.api_provider = ctk.CTkOptionMenu(f, values=["Civitai (API Key)", "Hugging Face (Token)"], height=50, width=500); self.api_provider.pack(pady=10)
+        self.entry_api = ctk.CTkEntry(f, placeholder_text="Insert Key/Token...", show="●", height=50, width=500); self.entry_api.pack(pady=10)
+        ctk.CTkButton(f, text="LOCK TO VAULT", command=self.save_api_key, height=55, fg_color="#e1b12c", text_color="#000", font=("Roboto", 14, "bold")).pack(pady=30)
+        self.api_list_frame = ctk.CTkScrollableFrame(f, label_text="ENCRYPTED KEYS", fg_color="#0f0f0f", width=500, height=300); self.api_list_frame.pack(pady=10)
 
-    # --- PERSISTENCE ---
+    def setup_optimizer_tab(self):
+        f = ctk.CTkFrame(self.tab_opt, fg_color="transparent"); f.pack(padx=50, pady=50, fill="both", expand=True)
+        ctk.CTkLabel(f, text="ENGINE OPTIMIZER", font=("Orbitron", 22, "bold"), text_color="#9c88ff").pack(pady=30)
+        self.gpu_picker = ctk.CTkOptionMenu(f, values=["Detecting..."], command=self.set_profile, height=55, width=600); self.gpu_picker.pack(pady=10)
+        self.ram_menu = ctk.CTkOptionMenu(f, values=list(RAM_PROFILES.keys()), command=self.set_ram_profile, height=55, width=600); self.ram_menu.pack(pady=10)
+        self.entry_expert = ctk.CTkEntry(f, placeholder_text="Expert Arguments (e.g. --xformers --fp16)", height=55, width=600); self.entry_expert.pack(pady=10)
+        self.entry_expert.bind("<KeyRelease>", lambda e: self.update_expert_flags())
+
+    def setup_console_tab(self):
+        self.console_box = ctk.CTkTextbox(self.tab_log, font=("Consolas", 12), fg_color="#000", text_color="#3ae374"); self.console_box.pack(fill="both", expand=True, padx=15, pady=15)
+
     def load_vault(self):
-        if not VAULT_FILE.exists(): return
-        try:
-            with open(VAULT_FILE, 'r') as f:
-                self.saved_apis = json.load(f); self.refresh_api_ui()
-        except: self.saved_apis = []
+        if VAULT_FILE.exists():
+            try:
+                with open(VAULT_FILE, 'r') as f: self.saved_apis = json.load(f); self.refresh_api_ui()
+            except: self.saved_apis = []
 
     def persist_vault(self):
-        try:
-            VAULT_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(VAULT_FILE, 'w', encoding='utf-8') as f:
-                json.dump(self.saved_apis, f, indent=4)
-        except Exception as e:
-            print(f"[!] Erro ao salvar Vault: {e}")
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(VAULT_FILE, 'w') as f: json.dump(self.saved_apis, f, indent=4)
 
     def load_config(self):
-        if not CONFIG_FILE.exists(): return
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                d = json.load(f); self.active_profile = d.get("hw_profile", ""); self.expert_flags = d.get("expert_flags", "")
-            if self.expert_flags: self.entry_expert.delete(0, "end"); self.entry_expert.insert(0, self.expert_flags)
-        except: pass
+        if CONFIG_FILE.exists():
+            try:
+                with open(CONFIG_FILE, 'r') as f:
+                    d = json.load(f); self.active_profile = d.get("hw_profile", ""); self.expert_flags = d.get("expert_flags", ""); self.active_ram_profile = d.get("ram_profile", "Balanced (Standard)")
+                if self.expert_flags: self.entry_expert.delete(0, "end"); self.entry_expert.insert(0, self.expert_flags)
+                self.ram_menu.set(self.active_ram_profile)
+            except: pass
 
     def persist_config(self):
-        d = {"hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "expert_flags": self.expert_flags}
-        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            with open(CONFIG_FILE, 'w') as f: json.dump(d, f, indent=4)
-        except: pass
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        d = {"hw_profile": self.active_profile, "hw_vendor": self.detected_vendor, "expert_flags": self.expert_flags, "ram_profile": self.active_ram_profile}
+        with open(CONFIG_FILE, 'w') as f: json.dump(d, f, indent=4)
 
-    # --- UI UPDATES ---
-    def refresh_api_ui(self):
-        if not hasattr(self, "api_list_frame") or not self.api_list_frame: return
-        for w in self.api_list_frame.winfo_children(): w.destroy()
-        if not self.saved_apis:
-            ctk.CTkLabel(self.api_list_frame, text="No keys in vault.", text_color="#555").pack(pady=20)
-        else:
-            for item in self.saved_apis:
-                provider = item.get("provider", "Civitai") if isinstance(item, dict) else "Civitai"
-                key = item.get("key", item) if isinstance(item, dict) else item
-                f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a", height=45); f.pack(fill="x", pady=2, padx=5)
-                color = "#3498db" if "Hugging" in provider else "#e67e22"
-                ctk.CTkLabel(f, text=f"[{provider.upper()}]", font=("Consolas", 11, "bold"), text_color=color).pack(side="left", padx=10)
-                ctk.CTkLabel(f, text=f"{key[:6]}...", font=("Consolas", 12)).pack(side="left")
-                ctk.CTkButton(f, text="REVOKE", width=60, height=24, fg_color="#c0392b", command=lambda k=item: self.remove_api_key(k)).pack(side="right", padx=10)
+    def telemetry_loop(self):
+        while True:
+            try:
+                if psutil: 
+                    self.lbl_cpu.configure(text=f"CPU: {psutil.cpu_percent()}%"); self.lbl_ram.configure(text=f"RAM: {psutil.virtual_memory().percent}%")
+                    self.lbl_disk.configure(text=f"DISK: {psutil.disk_usage(str(MODELS_DIR)).free // (1024**3)} GB FREE")
+                vram = "VRAM: -- MB"
+                if self.detected_vendor == "NVIDIA":
+                    try: out = subprocess.check_output("nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits", shell=True, text=True, timeout=1).strip(); vram = f"VRAM: {out} MB"
+                    except: pass
+                self.lbl_vram.configure(text=vram)
+            except: pass
+            time.sleep(2)
 
-    def refresh_models_list(self):
-        if not hasattr(self, 'inv_scroll') or not self.inv_scroll: return
-        for w in self.inv_scroll.winfo_children(): w.destroy()
-        total_size = 0
-        if MODELS_DIR.exists():
-            for root, dirs, files in os.walk(MODELS_DIR):
-                for f in files:
-                    if f.endswith((".safetensors", ".ckpt", ".gguf")):
-                        path = Path(root) / f; f_size = os.path.getsize(path) / (1024**3); total_size += f_size
-                        btn = ctk.CTkButton(self.inv_scroll, text=f"● {f} ({f_size:.2f} GB)", anchor="w", fg_color="transparent", hover_color="#222", command=lambda p=path, n=f, s=f_size: self.load_model_insight(p, n, s))
-                        btn.pack(fill="x", pady=1)
-        self.lbl_inv_total.configure(text=f"Total: {total_size:.2f} GB")
+    def status_loop(self):
+        while True:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1); on = s.connect_ex(('127.0.0.1', 8188)) == 0; s.close()
+                self.status_indicator.configure(text="● ONLINE" if on else "● OFFLINE", text_color="#4cd137" if on else "#ff4444")
+            except: pass
+            time.sleep(3)
 
-    def refresh_gallery(self):
-        if not hasattr(self, 'gal_list') or not self.gal_list: return
-        for w in self.gal_list.winfo_children(): w.destroy()
-        if not OUTPUT_DIR.exists(): return
-        files = sorted([f for f in os.listdir(OUTPUT_DIR) if f.lower().endswith((".png", ".jpg", ".webp", ".mp4", ".webm", ".gif"))], reverse=True)
-        for f in files:
-            path = OUTPUT_DIR / f
-            btn = ctk.CTkButton(self.gal_list, text=f"📷 {f}", anchor="w", fg_color="transparent", hover_color="#222", command=lambda p=path: self.load_gallery_item(p))
-            btn.pack(fill="x", pady=1)
+    def console_loop(self):
+        last_pos = 0
+        while self.console_active:
+            if ENGINE_LOG.exists():
+                size = ENGINE_LOG.stat().st_size
+                if size < last_pos: self.console_box.delete("1.0", "end"); last_pos = 0
+                if size > last_pos:
+                    with open(ENGINE_LOG, "r", encoding="utf-8", errors="ignore") as f:
+                        f.seek(last_pos)
+                        content = f.read()
+                        if content: self.console_box.insert("end", content); self.console_box.see("end")
+                        last_pos = f.tell()
+            time.sleep(0.2)
 
-    def refresh_canvas(self):
-        if not hasattr(self, 'canvas_list') or not self.canvas_list: return
-        self.canvas_list.delete("1.0", "end")
-        if WORKFLOWS_DIR.exists():
-            for f in sorted(os.listdir(WORKFLOWS_DIR)):
-                if f.endswith(".json"): self.canvas_list.insert("end", f"⚡ {f}\n")
+    def start_loops(self):
+        threading.Thread(target=self.telemetry_loop, daemon=True).start()
+        threading.Thread(target=self.status_loop, daemon=True).start()
+        threading.Thread(target=self.console_loop, daemon=True).start()
 
-    # --- CORE ENGINE ---
     def start_studio(self):
         if self.process: return
         self.kill_port(8188); time.sleep(1)
         gpu_f = GPU_DATABASE.get(self.detected_vendor, {}).get(self.active_profile, "").split()
-        py = sys.executable
-        args = [str(py), "-u", str(ENGINE_DIR / "main.py"), "--listen", "127.0.0.1", "--port", "8188", "--extra-model-paths-config", str(BASE_DIR_PATH / "config/extra_model_paths.yaml")] + gpu_f
+        ram_f = RAM_PROFILES.get(self.active_ram_profile, "").split()
+        py = str(VENV_PATH / "bin/python3" if os.name != "nt" else VENV_PATH / "Scripts/python.exe")
+        args = [py, "-u", str(ENGINE_DIR / "main.py"), "--listen", "127.0.0.1", "--port", "8188", "--extra-model-paths-config", str(CONFIG_DIR / "extra_model_paths.yaml")] + gpu_f + ram_f
         try:
             env = os.environ.copy(); env["PYTHONUNBUFFERED"] = "1"
-            env["VIRTUAL_ENV"] = str(VENV_PATH)
-            site_pkgs = f"{VENV_PATH}/lib/python3.11/site-packages"
-            env["PYTHONPATH"] = f"{site_pkgs}:{env.get('PYTHONPATH', '')}"
-            
-            if os.name == "nt": self.process = subprocess.Popen(f'start "AI CORE" cmd /k {" ".join(args)}', shell=True, cwd=str(ENGINE_DIR), env=env)
-            else: 
-                log_f = open(ENGINE_LOG, "w")
-                log_f.write(f"[*] EXECUTANDO: {' '.join(args)}\n")
-                log_f.write(f"[*] CWD: {ENGINE_DIR}\n")
-                log_f.write(f"[*] ENV PYTHONPATH: {env['PYTHONPATH']}\n")
-                log_f.flush()
-                self.process = subprocess.Popen(args, stdout=log_f, stderr=log_f, cwd=str(ENGINE_DIR), env=env)
+            self.process = subprocess.Popen(args, stdout=open(ENGINE_LOG, "w"), stderr=subprocess.STDOUT, cwd=str(ENGINE_DIR), env=env)
         except Exception as e: messagebox.showerror("Error", str(e))
 
     def stop_studio(self):
-        self.kill_port(8188)
+        self.kill_port(8188); 
         if self.process: self.process.terminate(); self.process = None
 
-    def start_console_stream(self):
-        while self.console_active:
-            if ENGINE_LOG.exists():
-                with open(ENGINE_LOG, "r", encoding="utf-8", errors="ignore") as f:
-                    f.seek(0, 2); last_size = os.path.getsize(str(ENGINE_LOG))
-                    while self.console_active:
-                        curr_size = os.path.getsize(str(ENGINE_LOG))
-                        if curr_size < last_size: self.console_box.delete("1.0", "end"); f.seek(0); last_size = curr_size
-                        line = f.readline()
-                        if line: self.console_box.insert("end", line); self.console_box.see("end")
-                        else: time.sleep(0.1)
-                        last_size = curr_size
-            else: time.sleep(1)
-
-    # --- LOGIC ---
-    def save_api_key(self):
-        key = self.entry_api.get().strip()
-        provider = self.api_provider.get()
-        if len(key) < 15:
-            messagebox.showwarning("Vault", "Chave muito curta ou inválida.")
-            return
-        
-        # Criar entrada estruturada
-        new_entry = {"provider": provider, "key": key}
-        
-        # Evitar duplicatas
-        if new_entry not in self.saved_apis:
-            self.saved_apis.append(new_entry)
-            self.persist_vault()
-            self.refresh_api_ui()
-            messagebox.showinfo("Vault", f"Chave {provider} salva com sucesso!")
-        
-        self.entry_api.delete(0, "end")
-
-    def remove_api_key(self, item):
-        if item in self.saved_apis: self.saved_apis.remove(item); self.persist_vault(); self.refresh_api_ui()
-
-    def apply_preset(self, choice):
-        p = PRESET_MODELS.get(choice); self.active_preset = p
-        self.entry_id.delete(0, "end")
-        self.entry_id.insert(0, f"{p['repo']}/{p['file']}" if p.get("source") == "hf" else p.get("id", ""))
-        self.option_type.set(p["type"])
-
     def start_download(self):
-        m_id = self.entry_id.get().strip(); threading.Thread(target=self.run_downloader, args=(m_id, self.option_type.get()), daemon=True).start()
+        m_id = self.entry_id.get().strip()
+        m_type = self.option_type.get()
+        if not m_id: return
+        threading.Thread(target=self.run_downloader, args=(m_id, m_type), daemon=True).start()
 
     def run_downloader(self, m_id, m_type):
-        py = get_short_path(VENV_PATH / ("bin/python3" if os.name != "nt" else "bin/python.exe"))
+        py = str(VENV_PATH / "bin/python3" if os.name != "nt" else VENV_PATH / "Scripts/python.exe")
         p = self.active_preset
-        src = p.get("source", "hf") if p else "hf"
-        dl = get_short_path(TOOLS_DIR / ("hf_downloader.py" if src == "hf" else "downloader.py"))
-        cmd = [str(py), "-u", str(dl), p.get("repo", m_id), p.get("file", ""), m_type] if src == "hf" else [str(py), "-u", str(dl), m_id, m_type]
         
+        # Robust source detection
+        src = "hf" # Default
+        if p and p.get("source"):
+            src = p["source"]
+        elif "/" in m_id:
+            src = "hf"
+        else:
+            src = "civitai"
+
+        dl_script = TOOLS_DIR / ("hf_downloader.py" if src == "hf" else "downloader.py")
+        
+        # Build command based on source
+        if src == "hf":
+            repo = p.get("repo", m_id) if p else m_id
+            filename = p.get("file", "") if p else ""
+            cmd = [py, "-u", str(dl_script), repo, filename, m_type]
+        else:
+            model_id = p.get("id", m_id) if p else m_id
+            cmd = [py, "-u", str(dl_script), model_id, m_type]
+
         env = os.environ.copy()
-        # Injetar chaves do Vault no ambiente
+        env["PYTHONWARNINGS"] = "ignore:unsupported version:RequestsDependencyWarning"
         for item in self.saved_apis:
-            if isinstance(item, dict):
-                prov = item.get("provider", "").upper()
-                key = item.get("key", "")
-                if "HUGGING" in prov: env["HUGGING_FACE_HUB_TOKEN"] = key
-                if "CIVITAI" in prov: env["CIVITAI_API_KEY"] = key
-        
-        try:
-            with open(ENGINE_LOG, "a") as f:
-                f.write(f"\n[*] INICIANDO AQUISIÇÃO: {m_id}\n")
-                f.flush()
-                process = subprocess.Popen(cmd, env=env, stdout=f, stderr=f, universal_newlines=True)
-                process.wait()
-                f.write(f"\n[V] PROCESSO FINALIZADO.\n")
-        except Exception as e:
-            print(f"[!] Erro no Downloader: {e}")
+            if "Hugging" in item["provider"]: env["HUGGING_FACE_HUB_TOKEN"] = item["key"]
+            if "Civitai" in item["provider"]: env["CIVITAI_API_KEY"] = item["key"]
+            
+        with open(ENGINE_LOG, "a") as f:
+            f.write(f"\n[*] START DOWNLOAD: {m_id} via {src.upper()}\n"); f.flush()
+            subprocess.Popen(cmd, env=env, stdout=f, stderr=f).wait()
         self.after(500, self.refresh_models_list)
 
-    # --- HELPERS ---
+    def refresh_models_list(self):
+        for w in self.inv_scroll.winfo_children(): w.destroy()
+        if MODELS_DIR.exists():
+            for root, _, files in os.walk(MODELS_DIR):
+                for f in sorted(files):
+                    if f.endswith((".safetensors", ".ckpt", ".gguf")):
+                        path = Path(root) / f
+                        ctk.CTkButton(self.inv_scroll, text=f"📦 {f}", anchor="w", fg_color="transparent", 
+                                     hover_color="#1e272e", command=lambda p=path: self.load_model_insight(p)).pack(fill="x")
+
+    def refresh_gallery(self):
+        for w in self.gal_list.winfo_children(): w.destroy()
+        if OUTPUT_DIR.exists():
+            for f in sorted(os.listdir(OUTPUT_DIR), reverse=True):
+                if f.lower().endswith((".png", ".mp4", ".gif", ".jpg")):
+                    path = OUTPUT_DIR / f
+                    ctk.CTkButton(self.gal_list, text=f"🎬 {f}", anchor="w", fg_color="transparent", 
+                                 hover_color="#1e272e", command=lambda p=path: self.load_gallery_item(p)).pack(fill="x")
+
+    def refresh_blueprints(self):
+        for w in self.blue_scroll.winfo_children(): w.destroy()
+        if WORKFLOWS_DIR.exists():
+            for f in sorted(os.listdir(WORKFLOWS_DIR)):
+                if f.endswith(".json"):
+                    path = WORKFLOWS_DIR / f
+                    ctk.CTkButton(self.blue_scroll, text=f"⚡ DEPLOY: {f}", anchor="w", fg_color="#1e272e", 
+                                 hover_color="#8e44ad", command=lambda p=path: self.manual_deploy(p)).pack(fill="x", pady=2)
+
+    def manual_deploy(self, path):
+        self.active_wf_path = path
+        self.inject_active_workflow()
+
+    def load_model_insight(self, path): 
+        self.active_model_path = path; self.txt_meta.delete("1.0", "end")
+        self.txt_meta.insert("end", f"ASSET: {path.name}\nTYPE: {path.parent.name}\nPATH: {path}")
+        self.load_workflow_preset(path.name)
+
+    def load_workflow_preset(self, model_name):
+        wf_name = model_name.split(".")[0] + ".json"
+        wf_path = WORKFLOWS_DIR / wf_name
+        if wf_path.exists():
+            self.active_wf_path = wf_path
+            self.btn_deploy.configure(state="normal", text=f"ACTIVATE: {wf_name}", fg_color="#8e44ad")
+            self.console_box.insert("end", f"\n[V] Linked Blueprint: {wf_name}\n")
+        else:
+            self.active_wf_path = None
+            self.btn_deploy.configure(state="disabled", text="INJECT BLUEPRINT", fg_color="#333")
+
+    def inject_active_workflow(self):
+        if not self.active_wf_path: return
+        try:
+            with open(self.active_wf_path, "r") as f: wf = json.load(f)
+            prompt_data = wf.get("prompt", wf)
+            r = requests.post("http://127.0.0.1:8188/prompt", json={"prompt": prompt_data}, timeout=10)
+            if r.status_code == 200:
+                self.console_box.insert("end", f"\n[V] SUCCESS: Blueprint {self.active_wf_path.name} injected!\n")
+                messagebox.showinfo("Neural Studio", "Blueprint Deployed!")
+            else:
+                self.console_box.insert("end", f"\n[X] Rejected: {r.status_code} - {r.text[:100]}\n")
+        except Exception as e:
+            self.console_box.insert("end", f"\n[X] Engine Offline: {e}\n")
+            messagebox.showerror("Error", "Launch Engine First!")
+
+    def load_gallery_item(self, path):
+        try:
+            if path.suffix.lower() in [".png", ".jpg"]:
+                img = ctk.CTkImage(Image.open(path), size=(450, 450)); self.lbl_gal_img.configure(image=img, text="")
+            else: self.lbl_gal_img.configure(image=None, text=f"PREVIEW: {path.name}\n(Video/GIF Support in ComfyUI)")
+        except: pass
+
+    def delete_model_action(self):
+        if self.active_model_path and messagebox.askyesno("Delete", f"Remove {self.active_model_path.name}?"):
+            try: os.remove(self.active_model_path); self.refresh_models_list()
+            except Exception as e: messagebox.showerror("Error", str(e))
+
     def detect_hardware(self):
         try:
-            if os.name == "nt": out = subprocess.check_output('powershell "Get-CimInstance Win32_VideoController | Select-Object Name"', shell=True, text=True).upper()
-            else: out = subprocess.check_output(r"lspci | grep -i 'vga\|3d'", shell=True, text=True).upper()
+            out = subprocess.check_output(r"lspci | grep -i 'vga\|3d'", shell=True, text=True).upper()
             if "NVIDIA" in out: self.detected_vendor = "NVIDIA"
             elif "AMD" in out: self.detected_vendor = "AMD"
         except: pass
         self.refresh_optimizer_ui()
 
     def refresh_optimizer_ui(self):
-        if not hasattr(self, 'gpu_picker'): return
-        models = list(GPU_DATABASE.get(self.detected_vendor, {}).keys())
-        self.gpu_picker.configure(values=models)
-        if models:
-            d = self.active_profile if self.active_profile in models else models[0]
-            self.gpu_picker.set(d); self.active_profile = d
+        m = list(GPU_DATABASE.get(self.detected_vendor, {}).keys()); self.gpu_picker.configure(values=m)
+        if m: self.gpu_picker.set(self.active_profile if self.active_profile in m else m[0]); self.active_profile = self.gpu_picker.get()
 
-    def load_model_insight(self, path, name, size):
-        self.active_model_path = path
-        info = f"NAME: {name}\nSIZE: {size:.2f} GB\nPATH: {path}"
-        self.txt_meta.delete("1.0", "end"); self.txt_meta.insert("end", info)
+    def save_api_key(self):
+        k, p = self.entry_api.get().strip(), self.api_provider.get()
+        if len(k) > 10: self.saved_apis.append({"provider": p, "key": k}); self.persist_vault(); self.refresh_api_ui(); self.entry_api.delete(0, "end")
 
-    def load_gallery_item(self, path):
-        self.active_gallery_path = path
-        self.txt_gal_meta.delete("1.0", "end"); self.txt_gal_meta.insert("end", f"FILE: {path.name}")
+    def remove_api_key(self, item):
+        if item in self.saved_apis: self.saved_apis.remove(item); self.persist_vault(); self.refresh_api_ui()
 
-    def delete_model_action(self):
-        if not self.active_model_path: return
-        if messagebox.askyesno("Confirm Delete", f"Delete {self.active_model_path.name}?"):
-            try:
-                os.remove(self.active_model_path); self.refresh_models_list()
-                self.txt_meta.delete("1.0", "end")
-            except: pass
+    def refresh_api_ui(self):
+        for w in self.api_list_frame.winfo_children(): w.destroy()
+        for i in self.saved_apis:
+            f = ctk.CTkFrame(self.api_list_frame, fg_color="#1a1a1a"); f.pack(fill="x", pady=2)
+            c = "#3498db" if "Hugging" in i["provider"] else "#e67e22"
+            ctk.CTkLabel(f, text=f"[{i['provider'][:3].upper()}] {i['key'][:8]}...", text_color=c).pack(side="left", padx=10)
+            ctk.CTkButton(f, text="DEL", width=40, fg_color="#c0392b", command=lambda item=i: self.remove_api_key(item)).pack(side="right")
 
-    def set_profile(self, choice): self.active_profile = choice; self.persist_config()
-    def set_ram_profile(self, choice): self.active_ram_profile = choice; self.persist_config()
-    def update_expert_flags(self, e=None): self.expert_flags = self.entry_expert.get(); self.persist_config()
+    def set_profile(self, c): self.active_profile = c; self.persist_config()
+    def set_ram_profile(self, c): self.active_ram_profile = c; self.persist_config()
+    def update_expert_flags(self): self.expert_flags = self.entry_expert.get(); self.persist_config()
+    def apply_preset(self, c):
+        p = PRESET_MODELS.get(c); self.active_preset = p; self.entry_id.delete(0, "end")
+        m_id = p.get("repo") if p.get("source") == "hf" else p.get("id", "")
+        self.entry_id.insert(0, m_id); self.option_type.set(p["type"])
+        m_filename = p.get("file") if p.get("source") == "hf" else f"{m_id}.safetensors"
+        if (MODELS_DIR / p["type"] / m_filename).exists(): self.load_workflow_preset(m_filename)
+
     def kill_port(self, port):
         try:
             if os.name != "nt": subprocess.run(["fuser", "-k", f"{port}/tcp"], capture_output=True)
             else: subprocess.run(f"powershell -Command \"Stop-Process -Id (Get-NetTCPConnection -LocalPort {port}).OwningProcess -Force\"", shell=True, capture_output=True)
         except: pass
-    def start_loops(self):
-        threading.Thread(target=self.start_console_stream, daemon=True).start()
-        threading.Thread(target=self.status_loop, daemon=True).start()
-        threading.Thread(target=self.telemetry_loop, daemon=True).start()
-    def status_loop(self):
-        while True:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1)
-            on = s.connect_ex(('127.0.0.1', 8188)) == 0; s.close()
-            self.status_indicator.configure(text="● SYSTEM OPERATIONAL" if on else "● SYSTEM OFFLINE", text_color="#44ff44" if on else "#ff4444")
-            time.sleep(3)
-    def telemetry_loop(self):
-        while True:
-            try:
-                if psutil:
-                    self.lbl_cpu.configure(text=f"CPU: {psutil.cpu_percent()}%"); self.lbl_swap.configure(text=f"SWAP: {psutil.swap_memory().percent}%")
-                    self.lbl_disk.configure(text=f"DISK: {psutil.disk_usage(str(MODELS_DIR)).free // (1024**3)} GB")
-                if self.detected_vendor == "NVIDIA":
-                    v = subprocess.check_output("nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits", shell=True, text=True, timeout=1).strip()
-                    self.lbl_vram.configure(text=f"VRAM: {v} MB")
-            except: pass
-            time.sleep(2)
-    def dataset_wizard(self): messagebox.showinfo("Wizard", "WIP")
-    def start_training(self): messagebox.showinfo("Training", "WIP")
 
-if __name__ == "__main__":
-    app = App(); app.mainloop()
+if __name__ == "__main__": App().mainloop()
