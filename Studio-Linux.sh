@@ -3,7 +3,7 @@
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BASE_DIR"
 
-echo "[*] Iniciando Command Center V3.0.1 (Enterprise Architecture)..."
+echo "[*] Iniciando Command Center V4.0.5 (God Mode Active)..."
 
 if [ ! -f ".venv/bin/activate" ]; then
     echo "[!] Ambiente virtual não encontrado!"
