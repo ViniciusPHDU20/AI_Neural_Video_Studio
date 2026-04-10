@@ -1,29 +1,59 @@
-# AI Neural Video Studio
+# 🎬 AI_Neural_Video_Studio: Professional Command Center
 
-A high-performance, portable environment for advanced video synthesis and photorealistic image generation. This suite provides a unified Command Center to manage complex AI workflows with a focus on stability, speed, and ease of deployment across Windows and Linux.
+**AI_Neural_Video_Studio** is a centralized command center for advanced AI Neural Video Generation. It provides a robust, professional-grade interface for managing **ComfyUI Core** operations, specializing in **Pony XL** support and high-fidelity video synthesis.
 
-## 🛠️ Key Components
-- **Command Center:** A modern, Dark-Mode GUI for engine control and asset management.
-- **Portable Architecture:** Decoupled engine and workspace, allowing for zero-config movement between drives or machines.
-- **Automated Infiltration:** Integrated downloader for high-fidelity models and research checkpoints.
-- **Production Blueprints:** Optimized JSON workflows for cinematic video and high-resolution upscaling.
+[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.x-yellow.svg)](https://www.python.org/)
+[![ComfyUI](https://img.shields.io/badge/Engine-ComfyUI-brightgreen.svg)](https://github.com/comfyanonymous/ComfyUI)
 
-## 🚀 Quick Start
+## 🚀 Strategic Features
 
-### Windows
-1. Run `Install-Windows.bat` (Requires Python 3.10+).
-2. Launch via `launcher.py`.
+- **Centralized Launcher**: A unified entry point (`launcher.py`) for managing local AI models, nodes, and configurations.
+- **Cross-Platform Installers**: Native deployment scripts for both Linux (`Install-Linux.sh`) and Windows (`Install-Windows.bat`).
+- **High-Fidelity Support**: Specialized configurations for **Pony XL** and advanced video diffusion models.
+- **Model Governance**: Automated model management and configuration tracking within the `.core` and `models` directory.
+- **Interactive Manual**: Comprehensive user guidance provided via `MANUAL_USUARIO.md` for rapid onboarding.
 
-### Linux
-1. Run `Install-Linux.sh`.
-2. Launch via `launcher.py`.
+## 🧰 Tech Stack
 
-## 📜 Credits & Acknowledgments
-This project is built upon the incredible work of the open-source AI community:
-- **Core Engine:** [ComfyUI](https://github.com/comfyanonymous/ComfyUI) by comfyanonymous.
-- **Management:** [ComfyUI-Manager](https://github.com/ltdrdata/ComfyUI-Manager) by ltdrdata.
-- **GUI Framework:** [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter) by TomSchimansky.
-- **Base Models:** Stability AI (SDXL) and the Pony Diffusion research community.
+| Component | Technology |
+| :--- | :--- |
+| **Backend Architecture** | Python 3 (Launcher Core) |
+| **Neural Engine** | ComfyUI / Stable Diffusion |
+| **Model Support** | Pony XL, SDXL, AnimateDiff |
+| **Platform Ops** | Bash / PowerShell / Batch |
 
-## ⚖️ License
-Distributed for research and artistic content generation purposes. Ensure compliance with model-specific licenses (e.g., CreativeML Open RAIL-M) when deploying assets.
+## 🛠 Deployment & Installation
+
+### Linux (Arch/Ubuntu)
+
+1. Clone the studio:
+   ```bash
+   git clone https://github.com/ViniciusPHDU20/AI_Neural_Video_Studio.git
+   cd AI_Neural_Video_Studio
+   ```
+2. Run the automated installer:
+   ```bash
+   chmod +x Install-Linux.sh
+   ./Install-Linux.sh
+   ```
+3. Start the command center:
+   ```bash
+   ./Start-Studio.sh
+   ```
+
+### Windows (10/11)
+
+1. Clone or download the repository.
+2. Run `Install-Windows.bat` as administrator.
+3. Start the studio via `Start-Studio.bat`.
+
+## ⚙️ Project Structure
+
+- `launcher.py`: The heart of the command center.
+- `engine/`: Core AI logic and integration points.
+- `models/`: Central repository for your neural weights.
+- `TECHNICAL.md`: In-depth documentation for developers and power users.
+
+---
+*Developed by **ViniciusPHDU20***
